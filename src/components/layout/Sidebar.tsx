@@ -21,6 +21,7 @@ import { SETTINGS_TABS, resolveTabKey } from '../../pages/Settings';
 import { syncEngine, SyncStatus } from '../../lib/syncEngine';
 import { getSidebarMenuConfig, isMasterAdminAuthenticated } from '../../lib/masterServerService';
 import { PWAInstallButton } from '../pwa/PWAComponents';
+import { checkGranularRouteAccess, evaluatePermission } from '../../lib/userAccessControl';
 
 const REPORT_CATEGORIES = [
   {
@@ -267,12 +268,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed = false,
   setIsCollapsed
 }) => {
-  const { business, activeRole, canAccess } = useAuth();
+  const { business, activeRole, activeUser, currentUser, tenant, tenantId, canAccess } = useAuth();
   const { settings, userPreferences } = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const isServerRoute = location.pathname.startsWith('/server');
   const [activeServerTab, setActiveServerTab] = useState<string>('clients');
+  const [permissionVersion, setPermissionVersion] = useState<number>(0);
+
+  useEffect(() => {
+    const handlePermissionsUpdated = () => {
+      setPermissionVersion(v => v + 1);
+    };
+    window.addEventListener('mbi-user-access-profile-updated', handlePermissionsUpdated);
+    window.addEventListener('mbi-effective-permissions-updated', handlePermissionsUpdated);
+    window.addEventListener('storage', handlePermissionsUpdated);
+    return () => {
+      window.removeEventListener('mbi-user-access-profile-updated', handlePermissionsUpdated);
+      window.removeEventListener('mbi-effective-permissions-updated', handlePermissionsUpdated);
+      window.removeEventListener('storage', handlePermissionsUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     const handleActiveTab = (e: any) => {
@@ -422,6 +438,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
       syncShare: true,
     };
 
+    const effectiveUserId = activeUser?.id || currentUser?.uid || 'usr_active';
+    const effectiveTenantId = tenant?.tenantId || tenant?.id || tenantId;
+    const effectivePlan = (tenant as any)?.plan || 'Standard POS';
+
+    const menuIdMap: Record<string, string> = {
+      dashboard: 'dashboard',
+      parties: 'parties',
+      items: 'items',
+      shortage: 'items',
+      onlineStore: 'onlineStore',
+      sale: 'sale',
+      shifts: 'shiftManagement',
+      purchase: 'purchase',
+      expenses: 'expenses',
+      bank: 'bank',
+      reports: 'reports',
+    };
+
     const filtered = mainNavItems
       .filter(item => {
         if (!canAccess(item.moduleKey)) return false;
@@ -434,6 +468,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
         if (item.label === 'Expenses' && mods.expenses === false) return false;
         if ((item.label === 'Cash & Bank' || item.label === 'Cash in Hand') && mods.banking === false) return false;
         if (item.label === 'Reports' && mods.reports === false) return false;
+
+        // Check if item's menu is blocked in 173-Feature Switchboard
+        const targetMenuId = menuIdMap[item.id] || (item.moduleKey as string);
+        if (targetMenuId) {
+          const isMenuAllowed = evaluatePermission({
+            userId: effectiveUserId,
+            role: activeRole,
+            plan: effectivePlan,
+            tenantId: effectiveTenantId,
+            menuId: targetMenuId
+          });
+          if (!isMenuAllowed) return false;
+        }
+
+        // Check if item's primary route is blocked by granular switchboard
+        if (item.path) {
+          const routeCheck = checkGranularRouteAccess(item.path, {
+            userId: effectiveUserId,
+            role: activeRole,
+            plan: effectivePlan,
+            tenantId: effectiveTenantId
+          });
+          if (!routeCheck.isAllowed) return false;
+        }
+
         return true;
       })
       .map(item => {
@@ -443,10 +502,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
           if (sub.label.includes('Sale Order') && !settings.general.salePurchaseOrder) return false;
           if (sub.label.includes('Purchase Order') && !settings.general.salePurchaseOrder) return false;
           if (sub.label.includes('Delivery Challan') && !settings.general.deliveryChallan) return false;
+
+          // Check granular switchboard route access for each sub-menu item
+          if (sub.path) {
+            const routeCheck = checkGranularRouteAccess(sub.path, {
+              userId: effectiveUserId,
+              role: activeRole,
+              plan: effectivePlan,
+              tenantId: effectiveTenantId
+            });
+            if (!routeCheck.isAllowed) return false;
+          }
+
           return true;
         });
+
+        // If all subitems were disabled and item has no standalone route, or if all subitems were filtered out, hide it
+        if (item.subItems.length > 0 && filteredSubs.length === 0) {
+          return null;
+        }
+
         return { ...item, subItems: filteredSubs };
-      });
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     return [...filtered].sort((a, b) => {
       if (userOrder.length > 0 && a.id && b.id) {
@@ -458,12 +536,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       return getRank(a) - getRank(b);
     });
-  }, [mainNavItems, canAccess, settings.general, settings.item.enableItem, settings.modules, userPreferences]);
+  }, [mainNavItems, canAccess, settings.general, settings.item.enableItem, settings.modules, userPreferences, activeUser, activeRole, currentUser, tenant, tenantId, permissionVersion]);
 
-  const isSyncAllowed = canAccess('syncShare') && settings.modules?.syncShare !== false;
-  const isBackupAllowed = canAccess('backup');
-  const isUtilitiesAllowed = canAccess('utilities');
-  const isSettingsAllowed = canAccess('settings');
+  const currentUid = activeUser?.id || currentUser?.uid || 'usr_active';
+  const currentTid = tenant?.tenantId || tenant?.id || tenantId;
+  const currentPlan = (tenant as any)?.plan || 'Standard POS';
+
+  const isSyncAllowed = canAccess('syncShare') && settings.modules?.syncShare !== false && evaluatePermission({
+    userId: currentUid,
+    role: activeRole,
+    plan: currentPlan,
+    tenantId: currentTid,
+    menuId: 'syncShare'
+  });
+
+  const isBackupAllowed = canAccess('backup') && evaluatePermission({
+    userId: currentUid,
+    role: activeRole,
+    plan: currentPlan,
+    tenantId: currentTid,
+    menuId: 'utilities',
+    functionId: 'manageBackups'
+  });
+
+  const isUtilitiesAllowed = canAccess('utilities') && evaluatePermission({
+    userId: currentUid,
+    role: activeRole,
+    plan: currentPlan,
+    tenantId: currentTid,
+    menuId: 'utilities'
+  });
+
+  const isSettingsAllowed = canAccess('settings') && evaluatePermission({
+    userId: currentUid,
+    role: activeRole,
+    plan: currentPlan,
+    tenantId: currentTid,
+    menuId: 'settings'
+  });
   const isServerAllowed = activeRole === 'Primary Admin' || activeRole === 'Secondary Admin' || activeRole === 'Admin' || activeRole === 'Store Manager' || !activeRole || isMasterAdminAuthenticated();
 
   return (

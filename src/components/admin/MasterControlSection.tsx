@@ -10,11 +10,15 @@ import {
   saveUserAccessControlProfile,
   resetUserToRoleDefaults,
   resetUserToPlanDefaults,
-  evaluatePermission
+  evaluatePermission,
+  computeEffectivePermissions
 } from '../../lib/userAccessControl';
 import { MasterActiveUser, getMasterActiveUsers } from '../../lib/masterServerService';
+import { normalizeUserRole } from '../../lib/permissions';
+import { PermissionDiagnosticsPanel } from './PermissionDiagnosticsPanel';
 import {
   Shield,
+  ShieldAlert,
   Sliders,
   CheckCircle2,
   XCircle,
@@ -34,6 +38,7 @@ import {
   Info,
   Filter,
   Eye,
+  EyeOff,
   Share2,
   Trash2,
   Edit3,
@@ -41,14 +46,17 @@ import {
   TrendingUp,
   Percent,
   Download,
-  Upload
+  Upload,
+  Bug
 } from 'lucide-react';
+import { PermissionDebuggerOverlay } from './PermissionDebuggerOverlay';
 
 interface MasterControlSectionProps {
   onNotify?: (message: string) => void;
 }
 
 export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNotify }) => {
+  const [isDebuggerOverlayOpen, setIsDebuggerOverlayOpen] = useState(false);
   const [users, setUsers] = useState<MasterActiveUser[]>(() => getMasterActiveUsers());
   const [selectedUserId, setSelectedUserId] = useState<string>(() => {
     const list = getMasterActiveUsers();
@@ -108,6 +116,7 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
   });
   const [isDirty, setIsDirty] = useState(false);
   const [saveStatusMsg, setSaveStatusMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'switchboard' | 'diagnostics' | 'simulator'>('switchboard');
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
   const [cloneSourceUserId, setCloneSourceUserId] = useState<string>('');
   const [testActionCode, setTestActionCode] = useState('SALE_EDIT');
@@ -159,143 +168,164 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
     return { totalFeatures, activeFeatures, inactiveFeatures, percentage };
   }, [profile]);
 
+  // Helper to commit profile state and immediately persist + sync to sidebar
+  const commitProfile = (newProfile: UserAccessControlProfile, changeNotice?: string) => {
+    newProfile.isCustomOverrideActive = true;
+    setProfile(newProfile);
+    
+    // Always persist & broadcast immediately so changes take effect instantly in real-time
+    saveUserAccessControlProfile(newProfile, true, 'Master Server Admin');
+    const serialized = JSON.stringify(newProfile);
+    localStorage.setItem('mbi_active_user_access_profile', serialized);
+    localStorage.setItem('mbi_user_access_profile_user_usr_active', serialized);
+    localStorage.setItem('mbi_master_control_last_selected_user', newProfile.userId);
+
+    const effective = computeEffectivePermissions(newProfile);
+    window.dispatchEvent(new CustomEvent('mbi-user-access-profile-updated', { detail: { profile: newProfile } }));
+    window.dispatchEvent(new CustomEvent('mbi-effective-permissions-updated', { detail: { effective } }));
+    window.dispatchEvent(new Event('storage'));
+
+    setIsDirty(false);
+    if (changeNotice) {
+      triggerNotify(changeNotice);
+    }
+  };
+
   // Toggle handlers
   const handleToggleMenu = (menuId: string, currentVal: boolean) => {
     const newVal = !currentVal;
-    setProfile(prev => {
-      const nextMenuToggles = { ...prev.menuToggles, [menuId]: newVal };
-      const nextSubmenuToggles = { ...prev.submenuToggles };
-      const nextFunctionToggles = { ...prev.functionToggles };
-      const nextActionToggles = { ...prev.actionToggles };
+    const nextMenuToggles = { ...profile.menuToggles, [menuId]: newVal };
+    const nextSubmenuToggles = { ...profile.submenuToggles };
+    const nextFunctionToggles = { ...profile.functionToggles };
+    const nextActionToggles = { ...profile.actionToggles };
 
-      const menu = SYSTEM_MENU_TREE.find(m => m.id === menuId);
-      if (menu) {
-        menu.submenus.forEach(sub => {
-          if (!newVal) {
-            nextSubmenuToggles[sub.id] = false;
-            sub.functions.forEach(fn => {
-              nextFunctionToggles[fn.id] = false;
-              fn.actions.forEach(act => {
-                nextActionToggles[act.id] = false;
-              });
-            });
-          } else {
-            nextSubmenuToggles[sub.id] = true;
-            sub.functions.forEach(fn => {
-              nextFunctionToggles[fn.id] = true;
-              fn.actions.forEach(act => {
-                nextActionToggles[act.id] = true;
-              });
-            });
-          }
-        });
-      }
-
-      return {
-        ...prev,
-        isCustomOverrideActive: true,
-        menuToggles: nextMenuToggles,
-        submenuToggles: nextSubmenuToggles,
-        functionToggles: nextFunctionToggles,
-        actionToggles: nextActionToggles
-      };
-    });
-    setIsDirty(true);
-  };
-
-  const handleToggleSubmenu = (submenuId: string, currentVal: boolean, parentMenuId: string) => {
-    const newVal = !currentVal;
-    setProfile(prev => {
-      const nextSubmenuToggles = { ...prev.submenuToggles, [submenuId]: newVal };
-      const nextFunctionToggles = { ...prev.functionToggles };
-      const nextActionToggles = { ...prev.actionToggles };
-      const nextMenuToggles = { ...prev.menuToggles };
-
-      if (newVal) {
-        nextMenuToggles[parentMenuId] = true;
-      }
-
-      const menu = SYSTEM_MENU_TREE.find(m => m.id === parentMenuId);
-      const sub = menu?.submenus.find(s => s.id === submenuId);
-      if (sub) {
+    const menu = SYSTEM_MENU_TREE.find(m => m.id === menuId);
+    if (menu) {
+      menu.submenus.forEach(sub => {
+        nextSubmenuToggles[sub.id] = newVal;
         sub.functions.forEach(fn => {
           nextFunctionToggles[fn.id] = newVal;
           fn.actions.forEach(act => {
             nextActionToggles[act.id] = newVal;
           });
         });
-      }
+      });
+    }
 
-      return {
-        ...prev,
-        isCustomOverrideActive: true,
-        menuToggles: nextMenuToggles,
-        submenuToggles: nextSubmenuToggles,
-        functionToggles: nextFunctionToggles,
-        actionToggles: nextActionToggles
-      };
-    });
-    setIsDirty(true);
+    const nextProfile: UserAccessControlProfile = {
+      ...profile,
+      isCustomOverrideActive: true,
+      menuToggles: nextMenuToggles,
+      submenuToggles: nextSubmenuToggles,
+      functionToggles: nextFunctionToggles,
+      actionToggles: nextActionToggles
+    };
+
+    commitProfile(
+      nextProfile,
+      `Menu "${menu?.label || menuId}" is now ${newVal ? 'ENABLED (Visible in Sidebar)' : 'DISABLED (Hidden from Sidebar)'}`
+    );
+  };
+
+  const handleToggleSubmenu = (submenuId: string, currentVal: boolean, parentMenuId: string) => {
+    const newVal = !currentVal;
+    const nextSubmenuToggles = { ...profile.submenuToggles, [submenuId]: newVal };
+    const nextFunctionToggles = { ...profile.functionToggles };
+    const nextActionToggles = { ...profile.actionToggles };
+    const nextMenuToggles = { ...profile.menuToggles };
+
+    if (newVal) {
+      nextMenuToggles[parentMenuId] = true;
+    }
+
+    const menu = SYSTEM_MENU_TREE.find(m => m.id === parentMenuId);
+    const sub = menu?.submenus.find(s => s.id === submenuId);
+    if (sub) {
+      sub.functions.forEach(fn => {
+        nextFunctionToggles[fn.id] = newVal;
+        fn.actions.forEach(act => {
+          nextActionToggles[act.id] = newVal;
+        });
+      });
+    }
+
+    const nextProfile: UserAccessControlProfile = {
+      ...profile,
+      isCustomOverrideActive: true,
+      menuToggles: nextMenuToggles,
+      submenuToggles: nextSubmenuToggles,
+      functionToggles: nextFunctionToggles,
+      actionToggles: nextActionToggles
+    };
+
+    commitProfile(
+      nextProfile,
+      `Submenu "${sub?.label || submenuId}" is now ${newVal ? 'ENABLED' : 'DISABLED'}`
+    );
   };
 
   const handleToggleFunction = (functionId: string, currentVal: boolean, parentSubmenuId: string, parentMenuId: string) => {
     const newVal = !currentVal;
-    setProfile(prev => {
-      const nextFunctionToggles = { ...prev.functionToggles, [functionId]: newVal };
-      const nextActionToggles = { ...prev.actionToggles };
-      const nextSubmenuToggles = { ...prev.submenuToggles };
-      const nextMenuToggles = { ...prev.menuToggles };
+    const nextFunctionToggles = { ...profile.functionToggles, [functionId]: newVal };
+    const nextActionToggles = { ...profile.actionToggles };
+    const nextSubmenuToggles = { ...profile.submenuToggles };
+    const nextMenuToggles = { ...profile.menuToggles };
 
-      if (newVal) {
-        nextSubmenuToggles[parentSubmenuId] = true;
-        nextMenuToggles[parentMenuId] = true;
-      }
+    if (newVal) {
+      nextSubmenuToggles[parentSubmenuId] = true;
+      nextMenuToggles[parentMenuId] = true;
+    }
 
-      const menu = SYSTEM_MENU_TREE.find(m => m.id === parentMenuId);
-      const sub = menu?.submenus.find(s => s.id === parentSubmenuId);
-      const fn = sub?.functions.find(f => f.id === functionId);
-      if (fn) {
-        fn.actions.forEach(act => {
-          nextActionToggles[act.id] = newVal;
-        });
-      }
+    const menu = SYSTEM_MENU_TREE.find(m => m.id === parentMenuId);
+    const sub = menu?.submenus.find(s => s.id === parentSubmenuId);
+    const fn = sub?.functions.find(f => f.id === functionId);
+    if (fn) {
+      fn.actions.forEach(act => {
+        nextActionToggles[act.id] = newVal;
+      });
+    }
 
-      return {
-        ...prev,
-        isCustomOverrideActive: true,
-        menuToggles: nextMenuToggles,
-        submenuToggles: nextSubmenuToggles,
-        functionToggles: nextFunctionToggles,
-        actionToggles: nextActionToggles
-      };
-    });
-    setIsDirty(true);
+    const nextProfile: UserAccessControlProfile = {
+      ...profile,
+      isCustomOverrideActive: true,
+      menuToggles: nextMenuToggles,
+      submenuToggles: nextSubmenuToggles,
+      functionToggles: nextFunctionToggles,
+      actionToggles: nextActionToggles
+    };
+
+    commitProfile(
+      nextProfile,
+      `Function "${fn?.label || functionId}" is now ${newVal ? 'ENABLED' : 'DISABLED'}`
+    );
   };
 
   const handleToggleAction = (actionId: string, currentVal: boolean, parentFunctionId: string, parentSubmenuId: string, parentMenuId: string) => {
     const newVal = !currentVal;
-    setProfile(prev => {
-      const nextActionToggles = { ...prev.actionToggles, [actionId]: newVal };
-      const nextFunctionToggles = { ...prev.functionToggles };
-      const nextSubmenuToggles = { ...prev.submenuToggles };
-      const nextMenuToggles = { ...prev.menuToggles };
+    const nextActionToggles = { ...profile.actionToggles, [actionId]: newVal };
+    const nextFunctionToggles = { ...profile.functionToggles };
+    const nextSubmenuToggles = { ...profile.submenuToggles };
+    const nextMenuToggles = { ...profile.menuToggles };
 
-      if (newVal) {
-        nextFunctionToggles[parentFunctionId] = true;
-        nextSubmenuToggles[parentSubmenuId] = true;
-        nextMenuToggles[parentMenuId] = true;
-      }
+    if (newVal) {
+      nextFunctionToggles[parentFunctionId] = true;
+      nextSubmenuToggles[parentSubmenuId] = true;
+      nextMenuToggles[parentMenuId] = true;
+    }
 
-      return {
-        ...prev,
-        isCustomOverrideActive: true,
-        menuToggles: nextMenuToggles,
-        submenuToggles: nextSubmenuToggles,
-        functionToggles: nextFunctionToggles,
-        actionToggles: nextActionToggles
-      };
-    });
-    setIsDirty(true);
+    const nextProfile: UserAccessControlProfile = {
+      ...profile,
+      isCustomOverrideActive: true,
+      menuToggles: nextMenuToggles,
+      submenuToggles: nextSubmenuToggles,
+      functionToggles: nextFunctionToggles,
+      actionToggles: nextActionToggles
+    };
+
+    commitProfile(
+      nextProfile,
+      `Permission "${actionId}" is now ${newVal ? 'ALLOWED' : 'DENIED'}`
+    );
   };
 
   // High-Priority Direct Quick-Toggles
@@ -307,58 +337,62 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
 
   const handleQuickToggleInvoiceEditing = () => {
     const newVal = !isInvoiceEditingAllowed;
-    setProfile(prev => ({
-      ...prev,
+    commitProfile({
+      ...profile,
       isCustomOverrideActive: true,
-      menuToggles: { ...prev.menuToggles, sale: true },
-      submenuToggles: { ...prev.submenuToggles, saleInvoices: true },
-      functionToggles: { ...prev.functionToggles, editSale: newVal },
-      actionToggles: { ...prev.actionToggles, act_edit_sale: newVal }
-    }));
-    setIsDirty(true);
-    triggerNotify(`Invoice editing ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
+      menuToggles: { ...profile.menuToggles, sale: true },
+      submenuToggles: { ...profile.submenuToggles, saleInvoices: true },
+      functionToggles: { ...profile.functionToggles, editSale: newVal },
+      actionToggles: { ...profile.actionToggles, act_edit_sale: newVal }
+    }, `Invoice editing ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
   };
 
   const handleQuickToggleBillDeletion = () => {
     const newVal = !isBillDeletionAllowed;
-    setProfile(prev => ({
-      ...prev,
+    commitProfile({
+      ...profile,
       isCustomOverrideActive: true,
-      menuToggles: { ...prev.menuToggles, sale: true },
-      submenuToggles: { ...prev.submenuToggles, saleInvoices: true },
-      functionToggles: { ...prev.functionToggles, deleteSale: newVal },
-      actionToggles: { ...prev.actionToggles, act_delete_sale: newVal }
-    }));
-    setIsDirty(true);
-    triggerNotify(`Bill deletion ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
+      menuToggles: { ...profile.menuToggles, sale: true },
+      submenuToggles: { ...profile.submenuToggles, saleInvoices: true },
+      functionToggles: { ...profile.functionToggles, deleteSale: newVal },
+      actionToggles: { ...profile.actionToggles, act_delete_sale: newVal }
+    }, `Bill deletion ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
   };
 
   const handleQuickToggleShareAccess = () => {
     const newVal = !isShareAccessAllowed;
-    setProfile(prev => ({
-      ...prev,
+    commitProfile({
+      ...profile,
       isCustomOverrideActive: true,
-      menuToggles: { ...prev.menuToggles, sale: true },
-      submenuToggles: { ...prev.submenuToggles, saleInvoices: true },
-      functionToggles: { ...prev.functionToggles, reprintSale: newVal },
-      actionToggles: { ...prev.actionToggles, act_print_sale: newVal }
-    }));
-    setIsDirty(true);
-    triggerNotify(`Share & PDF print access ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
+      menuToggles: { ...profile.menuToggles, sale: true },
+      submenuToggles: { ...profile.submenuToggles, saleInvoices: true },
+      functionToggles: { ...profile.functionToggles, reprintSale: newVal },
+      actionToggles: { ...profile.actionToggles, act_print_sale: newVal }
+    }, `Share & PDF print access ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
   };
 
   const handleQuickTogglePurchaseCost = () => {
     const newVal = !isPurchaseCostAllowed;
-    setProfile(prev => ({
-      ...prev,
+    commitProfile({
+      ...profile,
       isCustomOverrideActive: true,
-      menuToggles: { ...prev.menuToggles, items: true },
-      submenuToggles: { ...prev.submenuToggles, inventoryList: true },
-      functionToggles: { ...prev.functionToggles, viewCostsAndMargins: newVal },
-      actionToggles: { ...prev.actionToggles, act_view_cost: newVal }
-    }));
-    setIsDirty(true);
-    triggerNotify(`Purchase cost & margin view ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
+      menuToggles: { ...profile.menuToggles, items: true },
+      submenuToggles: { ...profile.submenuToggles, inventoryList: true },
+      functionToggles: { ...profile.functionToggles, viewCostsAndMargins: newVal },
+      actionToggles: { ...profile.actionToggles, act_view_cost: newVal }
+    }, `Purchase cost & margin view ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
+  };
+
+  const handleQuickToggleDiscount = () => {
+    const newVal = !isDiscountAllowed;
+    commitProfile({
+      ...profile,
+      isCustomOverrideActive: true,
+      menuToggles: { ...profile.menuToggles, sale: true },
+      submenuToggles: { ...profile.submenuToggles, saleInvoices: true },
+      functionToggles: { ...profile.functionToggles, applyDiscount: newVal },
+      actionToggles: { ...profile.actionToggles, act_apply_disc: newVal }
+    }, `Discount authorization ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
   };
 
   // Bulk Actions
@@ -381,16 +415,14 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
       });
     });
 
-    setProfile(prev => ({
-      ...prev,
+    commitProfile({
+      ...profile,
       isCustomOverrideActive: true,
       menuToggles: menus,
       submenuToggles: submenus,
       functionToggles: functions,
       actionToggles: actions
-    }));
-    setIsDirty(true);
-    triggerNotify(`All 173 system features activated for ${selectedUser.name}`);
+    }, `All 173 system features activated for ${selectedUser.name}`);
   };
 
   const handleDeactivateAll = () => {
@@ -412,16 +444,14 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
       });
     });
 
-    setProfile(prev => ({
-      ...prev,
+    commitProfile({
+      ...profile,
       isCustomOverrideActive: true,
       menuToggles: menus,
       submenuToggles: submenus,
       functionToggles: functions,
       actionToggles: actions
-    }));
-    setIsDirty(true);
-    triggerNotify(`All features deactivated for ${selectedUser.name}`);
+    }, `All features deactivated for ${selectedUser.name} (Hidden from Sidebar & blocked)`);
   };
 
   const handleResetToRole = () => {
@@ -431,16 +461,34 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
       (selectedUser as any).plan || 'Pharmacy Pro',
       selectedUser.installationId || selectedUser.storeName
     );
-    setProfile(reset);
-    setIsDirty(false);
-    triggerNotify(`Reset ${selectedUser.name} permissions to default ${selectedUser.role} template`);
+    commitProfile(reset, `Reset ${selectedUser.name} permissions to default ${selectedUser.role} template`);
+  };
+
+  const handleSwitchSessionToUser = () => {
+    const normalizedRole = normalizeUserRole(selectedUser.role as any);
+    const simUser = {
+      id: selectedUser.id,
+      name: selectedUser.name,
+      role: normalizedRole,
+      storeName: selectedUser.storeName,
+      email: selectedUser.id.includes('@') ? selectedUser.id : `${selectedUser.id}@inventra.pos`
+    };
+    localStorage.setItem('active_simulated_user', JSON.stringify(simUser));
+    localStorage.setItem('active_simulated_role', normalizedRole);
+    localStorage.setItem('mbi_user_access_active_id', selectedUser.id);
+    localStorage.setItem('mbi_master_control_last_selected_user', selectedUser.id);
+
+    commitProfile(profile);
+
+    window.dispatchEvent(new CustomEvent('mbi-user-role-changed', { detail: { role: normalizedRole, user: simUser } }));
+    setSaveStatusMsg(`App session switched to ${selectedUser.name} (${normalizedRole})! The left sidebar is now displaying their exact permitted items.`);
+    triggerNotify(`⚡ App session switched to ${selectedUser.name} (${normalizedRole})!`);
   };
 
   const handleSaveProfile = () => {
-    saveUserAccessControlProfile(profile, true, 'Master Server Admin');
-    setIsDirty(false);
-    setSaveStatusMsg(`Master Control profile saved & broadcast for ${selectedUser.name}!`);
-    triggerNotify(`Successfully updated 173 feature permissions for ${selectedUser.name}`);
+    commitProfile(profile);
+    setSaveStatusMsg(`Master Control profile saved & applied live for ${selectedUser.name}!`);
+    triggerNotify(`Successfully saved 173 feature permissions for ${selectedUser.name}`);
     setTimeout(() => setSaveStatusMsg(null), 3500);
   };
 
@@ -590,7 +638,7 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
             </div>
           </div>
 
-          {/* User Selector Dropdown & Save Button */}
+          {/* User Selector Dropdown, Simulate & Save Button */}
           <div className="flex items-center gap-2.5 flex-wrap">
             <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-xl border border-slate-700">
               <UserCheck className="w-4 h-4 text-purple-400 ml-1.5" />
@@ -608,6 +656,26 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
             </div>
 
             <button
+              type="button"
+              onClick={() => setIsDebuggerOverlayOpen(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-sm cursor-pointer bg-amber-500 hover:bg-amber-400 text-slate-950"
+              title="Open Real-time Permission Debugger Overlay"
+            >
+              <Bug className="w-3.5 h-3.5 text-slate-950" />
+              <span>Permission Debugger</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSwitchSessionToUser}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white"
+              title={`Switch app session to ${selectedUser.name} to view their exact permitted items in the left sidebar`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Simulate User In App</span>
+            </button>
+
+            <button
               onClick={handleSaveProfile}
               className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
                 isDirty 
@@ -616,7 +684,7 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
               }`}
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{isDirty ? 'Save Changes *' : 'Saved Live'}</span>
+              <span>{isDirty ? 'Save Changes *' : 'Saved Live ⚡'}</span>
             </button>
           </div>
         </div>
@@ -663,17 +731,80 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
         </div>
       )}
 
-      {/* 2. High-Priority Direct Security Quick-Toggles */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-              High-Priority Critical Security Switches (1-Click Override)
-            </h3>
-          </div>
-          <span className="text-[11px] text-slate-400">Instantly toggle core restrictions for {selectedUser.name}</span>
-        </div>
+      {/* 2. Navigation Mode Tabs */}
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-bold overflow-x-auto shadow-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab('switchboard')}
+          className={`px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'switchboard'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>173-Feature Switchboard Matrix</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-500/20 text-purple-200">
+            {stats.activeFeatures}/{stats.totalFeatures}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('diagnostics')}
+          className={`px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'diagnostics'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4 text-amber-400" />
+          <span>Permission Diagnostics & Security Audit</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            Verify Effective State
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('simulator')}
+          className={`px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'simulator'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Zap className="w-4 h-4 text-amber-400" />
+          <span>Policy Simulator</span>
+        </button>
+      </div>
+
+      {/* View 1: Permission Diagnostics View */}
+      {activeTab === 'diagnostics' && (
+        <PermissionDiagnosticsPanel
+          selectedUser={selectedUser}
+          profile={profile}
+          isDirty={isDirty}
+          onSaveProfile={handleSaveProfile}
+          onUpdateProfile={setProfile}
+          onNotify={triggerNotify}
+        />
+      )}
+
+      {/* View 2: Switchboard Matrix View */}
+      {activeTab === 'switchboard' && (
+        <>
+          {/* High-Priority Direct Security Quick-Toggles */}
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  High-Priority Critical Security Switches (1-Click Override)
+                </h3>
+              </div>
+              <span className="text-[11px] text-slate-400">Instantly toggle core restrictions for {selectedUser.name}</span>
+            </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Invoice Editing Toggle */}
@@ -819,19 +950,7 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
             </div>
             <p className="text-[11px] text-slate-500 mb-2">Grant custom % or cash discounts</p>
             <button
-              onClick={() => {
-                const newVal = !isDiscountAllowed;
-                setProfile(prev => ({
-                  ...prev,
-                  isCustomOverrideActive: true,
-                  menuToggles: { ...prev.menuToggles, sale: true },
-                  submenuToggles: { ...prev.submenuToggles, saleInvoices: true },
-                  functionToggles: { ...prev.functionToggles, applyDiscount: newVal },
-                  actionToggles: { ...prev.actionToggles, act_apply_disc: newVal }
-                }));
-                setIsDirty(true);
-                triggerNotify(`Discount authorization ${newVal ? 'ALLOWED' : 'DENIED'} for ${selectedUser.name}`);
-              }}
+              onClick={handleQuickToggleDiscount}
               className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 isDiscountAllowed 
                   ? 'bg-rose-600 hover:bg-rose-700 text-white' 
@@ -946,9 +1065,18 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
                 </div>
 
                 {/* Menu Master Toggle Switch */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-[11px] font-bold ${isMenuEnabled ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {isMenuEnabled ? 'MODULE ON' : 'MODULE OFF'}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  {isMenuEnabled ? (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      <Check className="w-3 h-3" /> Visible in Sidebar
+                    </span>
+                  ) : (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 animate-pulse">
+                      <EyeOff className="w-3 h-3" /> Hidden in Sidebar
+                    </span>
+                  )}
+                  <span className={`text-[11px] font-bold ${isMenuEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    {isMenuEnabled ? 'MENU ON' : 'MENU OFF'}
                   </span>
                   <button
                     onClick={() => handleToggleMenu(menu.id, isMenuEnabled)}
@@ -1100,64 +1228,88 @@ export const MasterControlSection: React.FC<MasterControlSectionProps> = ({ onNo
           );
         })}
       </div>
+        </>
+      )}
 
-      {/* 5. Live Permission Simulator & Policy Tester */}
-      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
-        <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-500" />
-          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-            Realtime Policy & Permission Simulator for {selectedUser.name}
-          </h3>
-        </div>
-        <p className="text-xs text-slate-500">
-          Verify whether an exact action code (e.g. <code>SALE_EDIT</code>, <code>SALE_DELETE</code>, <code>VIEW_COST</code>, <code>SYNC_CLOUD</code>) will be allowed or blocked for this client user according to the most restrictive hierarchy rule.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <input
-            type="text"
-            value={testActionCode}
-            onChange={(e) => setTestActionCode(e.target.value.toUpperCase())}
-            placeholder="Enter action code (e.g. SALE_EDIT, SALE_DELETE, PARTY_CREATE)"
-            className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          />
-          <button
-            onClick={handleRunPermissionTest}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Test Policy</span>
-          </button>
-        </div>
-
-        {testResult && (
-          <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 animate-in fade-in ${
-            testResult.allowed
-              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
-              : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
-          }`}>
-            {testResult.allowed ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-            ) : (
-              <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            )}
-            <div className="text-xs space-y-1">
-              <div className="font-bold flex items-center gap-2">
-                <span>Result: {testResult.allowed ? '✅ ACCESS ALLOWED' : '❌ ACCESS DENIED / RESTRICTED'}</span>
-                <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-white/60 dark:bg-slate-900/60">
-                  {testActionCode}
-                </span>
-              </div>
-              <p className="text-[11px] opacity-90">{testResult.reason}</p>
-              {testResult.path && (
-                <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                  Hierarchy Path: {testResult.path}
-                </div>
-              )}
+      {/* View 3: Live Permission Simulator & Policy Tester */}
+      {(activeTab === 'switchboard' || activeTab === 'simulator') && (
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Realtime Policy & Permission Simulator for {selectedUser.name}
+              </h3>
             </div>
+            {activeTab === 'simulator' && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300">
+                Dedicated Simulator Mode
+              </span>
+            )}
           </div>
-        )}
-      </div>
+          <p className="text-xs text-slate-500">
+            Verify whether an exact action code (e.g. <code>SALE_EDIT</code>, <code>SALE_DELETE</code>, <code>VIEW_COST</code>, <code>SYNC_CLOUD</code>) will be allowed or blocked for this client user according to the most restrictive hierarchy rule.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <input
+              type="text"
+              value={testActionCode}
+              onChange={(e) => setTestActionCode(e.target.value.toUpperCase())}
+              placeholder="Enter action code (e.g. SALE_EDIT, SALE_DELETE, PARTY_CREATE)"
+              className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            <button
+              onClick={handleRunPermissionTest}
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Test Policy</span>
+            </button>
+          </div>
+
+          {testResult && (
+            <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 animate-in fade-in ${
+              testResult.allowed
+                ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+            }`}>
+              {testResult.allowed ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <div className="text-xs space-y-1">
+                <div className="font-bold flex items-center gap-2">
+                  <span>Result: {testResult.allowed ? '✅ ACCESS ALLOWED' : '❌ ACCESS DENIED / RESTRICTED'}</span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-white/60 dark:bg-slate-900/60">
+                    {testActionCode}
+                  </span>
+                </div>
+                <p className="text-[11px] opacity-90">{testResult.reason}</p>
+                {testResult.path && (
+                  <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                    Hierarchy Path: {testResult.path}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Real-Time Permission Debugger Overlay */}
+      <PermissionDebuggerOverlay
+        isOpen={isDebuggerOverlayOpen}
+        onClose={() => setIsDebuggerOverlayOpen(false)}
+        users={users}
+        selectedUserId={selectedUserId}
+        onSelectUserId={(id) => setSelectedUserId(id)}
+        onSwitchSession={(user) => {
+          handleSwitchSessionToUser();
+          triggerNotify(`Active browser session switched to ${user.name} (${user.role})`);
+        }}
+      />
     </div>
   );
 };

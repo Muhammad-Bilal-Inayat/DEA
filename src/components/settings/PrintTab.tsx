@@ -3,7 +3,8 @@ import {
   Printer, CheckCircle2, ChevronRight, Palette, Layout as LayoutIcon, 
   FileText, Download, QrCode, Building, Phone, Mail, MapPin, 
   Check, Eye, Sparkles, X, Edit3, ShieldCheck, ZoomIn, ZoomOut, RotateCcw,
-  Sliders, SlidersHorizontal, Table, DollarSign, Award, HelpCircle, Shield, Lock, AlertTriangle
+  Sliders, SlidersHorizontal, Table, DollarSign, Award, HelpCircle, Shield, Lock, AlertTriangle,
+  Maximize2, Minimize2
 } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -408,6 +409,7 @@ export const PrintTab: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isPageSetupOpen, setIsPageSetupOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const [guardNotice, setGuardNotice] = useState<string | null>(null);
 
   const MANDATORY_CREDIT = "DEVELOPED BY MBI INVENTRA - M BILAL INAYAT 0328-1302636";
@@ -715,28 +717,47 @@ export const PrintTab: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* =========================================================================
-            LEFT COLUMN (7 cols): LIVE REAL-TIME BILL PREVIEW
+            LEFT COLUMN: LIVE REAL-TIME BILL PREVIEW
+            Supports Full Size A4 mode without scrolling or clipping
             ========================================================================= */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-2">
+        <div className={`${isPreviewExpanded ? 'lg:col-span-12 xl:col-span-12' : 'lg:col-span-7 xl:col-span-7'} space-y-2 transition-all duration-200`}>
           
           {/* Document Preview Header Bar */}
-          <div className="flex items-center justify-between px-3 py-2 bg-slate-800 text-white rounded-t-2xl shadow-xs text-xs">
+          <div className="flex items-center justify-between px-3.5 py-2 bg-slate-800 text-white rounded-t-2xl shadow-xs text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
               <span className="font-bold flex items-center gap-1.5">
                 <Eye className="w-3.5 h-3.5 text-blue-400" />
-                Live Invoice Preview (Left Side)
+                Live Invoice Preview
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10.5px] px-2.5 py-0.5 rounded-full font-mono bg-slate-700 text-slate-200 border border-slate-600">
+              <span className="text-[10.5px] px-2.5 py-0.5 rounded-full font-mono bg-slate-700 text-slate-200 border border-slate-600 hidden sm:inline-block">
                 {printConf.printerType === 'REGULAR' ? printConf.paperSize : 'Thermal Roll'} • {printConf.theme.replace(/_/g, ' ')}
               </span>
+              <button
+                type="button"
+                onClick={() => setIsPreviewExpanded(!isPreviewExpanded)}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-100 rounded-lg text-[11px] font-semibold transition cursor-pointer border border-slate-600"
+                title={isPreviewExpanded ? "Switch to Split View with Settings" : "View Full Size A4 without side panels"}
+              >
+                {isPreviewExpanded ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Split View</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Full Size A4</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Simulated Workspace Canvas */}
-          <div className="bg-slate-200/80 rounded-b-2xl border border-slate-300 shadow-inner p-3 sm:p-6 overflow-x-auto min-h-[680px] flex justify-center items-start">
+          {/* Simulated Workspace Canvas - No horizontal scrollbar, perfectly centered */}
+          <div className="bg-slate-200/80 rounded-b-2xl border border-slate-300 shadow-inner p-2.5 sm:p-5 overflow-x-hidden min-h-[680px] flex justify-center items-start w-full">
             
             {/* Zoom Transform Wrapper */}
             <div 
@@ -756,12 +777,12 @@ export const PrintTab: React.FC = () => {
                 id="invoice-sample-document"
                 data-print-theme={isMonochromeOrWhite ? 'white' : activeThemeColor}
                 data-monochrome={isMonochromeOrWhite ? 'true' : 'false'}
-                className={`printable-bill-root bg-white shadow-2xl transition-all duration-200 select-text ${
+                className={`printable-bill-root bg-white shadow-2xl transition-all duration-200 select-text w-full ${
                   printConf.printerType === 'THERMAL'
-                    ? 'w-[320px] p-4 text-slate-900 font-mono text-[11px] border border-slate-300 rounded-sm'
+                    ? 'max-w-[320px] p-3.5 sm:p-4 text-slate-900 font-mono text-[11px] border border-slate-300 rounded-sm'
                     : printConf.paperSize === 'A5'
-                    ? 'w-full max-w-[560px] p-4 sm:p-6 text-slate-900 font-sans text-xs border border-slate-300 rounded-sm'
-                    : 'w-full max-w-[800px] p-4 sm:p-7 text-slate-900 font-sans text-xs border border-slate-300 rounded-sm'
+                    ? 'max-w-[560px] p-3.5 sm:p-5 text-slate-900 font-sans text-xs border border-slate-300 rounded-sm'
+                    : 'max-w-[850px] p-3 sm:p-6 text-slate-900 font-sans text-xs border border-slate-300 rounded-sm'
                 }`}
                 style={{
                   fontSize: printConf.invoiceTextSize === 'Large' ? '13px' : printConf.invoiceTextSize === 'Small' ? '11px' : '12px'
@@ -807,42 +828,60 @@ export const PrintTab: React.FC = () => {
                       <p className="text-[9.5px] text-slate-600">Customer: <strong>Cash Customer (واک ان گاہک)</strong></p>
                     </div>
 
-                    {/* Items Table */}
+                    {/* Items Table - 2-Line POS Thermal Format (No text overlap, text wraps to 2nd line) */}
                     <div className="py-1 border-b border-dashed border-slate-400">
-                      <div className="flex justify-between font-bold text-[10px] pb-1 border-b border-slate-200">
-                        <span className="w-1/2">ITEM</span>
-                        <span className="w-1/4 text-center">QTY x RATE</span>
-                        <span className="w-1/4 text-right">AMOUNT</span>
+                      <div className="flex justify-between font-bold text-[10px] pb-1 border-b border-dashed border-slate-300 text-slate-700">
+                        <span>ITEM / DESCRIPTION</span>
+                        <span>AMOUNT</span>
                       </div>
 
-                      <div className="divide-y divide-slate-100 py-1 space-y-1">
-                        <div>
-                          <div className="flex justify-between font-bold text-slate-900 pt-1">
-                            <span className="w-1/2 truncate">1. Panadol Extra 500mg</span>
-                            <span className="w-1/4 text-center font-mono">10 x 45</span>
-                            <span className="w-1/4 text-right font-mono">Rs. 450</span>
+                      <div className="divide-y divide-dashed divide-slate-200 py-1 space-y-1.5">
+                        {/* Item 1 */}
+                        <div className="pt-1 space-y-0.5">
+                          {/* Line 1: Item Name across full width, word-break, no truncate */}
+                          <div className="font-bold text-slate-900 text-[11px] leading-tight break-words">
+                            1. Panadol Extra 500mg (Paracetamol)
                           </div>
                           {printConf.theme === 'THERMAL_PHARMA' && (
-                            <p className="text-[9px] text-emerald-700 pl-3">Batch: PE-8821 | Exp: 12/28</p>
+                            <div className="text-[9px] text-emerald-800 font-mono pl-2.5">
+                              Batch: PE-8821 | Exp: 12/28
+                            </div>
                           )}
+                          {/* Line 2: 2nd line text with Qty x Rate on left, Amount on right */}
+                          <div className="flex justify-between items-center text-[10px] text-slate-700 pl-2.5 font-mono">
+                            <span>10 Pcs x 45.00</span>
+                            <span className="font-bold text-slate-900">Rs. 450.00</span>
+                          </div>
                         </div>
 
-                        <div>
-                          <div className="flex justify-between font-bold text-slate-900 pt-1">
-                            <span className="w-1/2 truncate">2. Augmentin 625mg Tab</span>
-                            <span className="w-1/4 text-center font-mono">2 x 350</span>
-                            <span className="w-1/4 text-right font-mono">Rs. 700</span>
+                        {/* Item 2 */}
+                        <div className="pt-1 space-y-0.5">
+                          {/* Line 1 */}
+                          <div className="font-bold text-slate-900 text-[11px] leading-tight break-words">
+                            2. Augmentin 625mg Tab (Co-Amoxiclav)
                           </div>
                           {printConf.theme === 'THERMAL_PHARMA' && (
-                            <p className="text-[9px] text-emerald-700 pl-3">Batch: AG-3301 | Exp: 09/27</p>
+                            <div className="text-[9px] text-emerald-800 font-mono pl-2.5">
+                              Batch: AG-3301 | Exp: 09/27
+                            </div>
                           )}
+                          {/* Line 2 */}
+                          <div className="flex justify-between items-center text-[10px] text-slate-700 pl-2.5 font-mono">
+                            <span>2 Pcs x 350.00</span>
+                            <span className="font-bold text-slate-900">Rs. 700.00</span>
+                          </div>
                         </div>
 
-                        <div>
-                          <div className="flex justify-between font-bold text-slate-900 pt-1">
-                            <span className="w-1/2 truncate">3. Surgical Cotton Roll</span>
-                            <span className="w-1/4 text-center font-mono">1 x 250</span>
-                            <span className="w-1/4 text-right font-mono">Rs. 250</span>
+                        {/* Item 3 */}
+                        <div className="pt-1 space-y-0.5">
+                          {/* Line 1 */}
+                          <div className="font-bold text-slate-900 text-[11px] leading-tight break-words">
+                            3. Surgical Cotton Roll 500g Sterile
+                          </div>
+                          {/* Line 2 */}
+                          <div className="flex justify-between items-center text-[10px] text-slate-700 pl-2.5 font-mono">
+                            <span>1 Roll x 250.00</span>
+                            <span className="font-bold text-slate-900">Rs. 250.00</span>
                           </div>
                         </div>
                       </div>
@@ -1232,108 +1271,119 @@ export const PrintTab: React.FC = () => {
                     )}
 
                     {/* =========================================================
-                        DYNAMIC ITEMS TABLE (Reflects tableColumns in real-time)
+                        DYNAMIC ITEMS TABLE (Zero-scrolling A4 Layout)
+                        Reflects tableColumns dynamically with fluid compact sizing
                         ========================================================= */}
-                    <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs">
-                      <table className="w-full text-left text-xs border-collapse min-w-full">
-                        <thead>
-                          <tr 
-                            className="font-bold border-b border-slate-300 text-slate-800"
-                            style={{ 
-                              backgroundColor: printConf.theme === 'A4_MODERN_MINIMAL' 
-                                ? '#f8fafc' 
-                                : `${activeThemeColor}14`
-                            }}
-                          >
-                            {printConf.tableColumns.serialNo && <th className="px-2 py-1.5 text-center w-8 whitespace-nowrap">#</th>}
-                            {printConf.tableColumns.itemName && <th className="px-2 py-1.5 min-w-[130px]">Item Description</th>}
-                            {printConf.tableColumns.hsnSac && <th className="px-2 py-1.5 whitespace-nowrap">HSN</th>}
-                            {printConf.tableColumns.batchNo && <th className="px-2 py-1.5 whitespace-nowrap">Batch</th>}
-                            {printConf.tableColumns.expDate && <th className="px-2 py-1.5 whitespace-nowrap">Exp</th>}
-                            {printConf.tableColumns.mfgDate && <th className="px-2 py-1.5 whitespace-nowrap">Mfg</th>}
-                            {printConf.tableColumns.mrp && <th className="px-2 py-1.5 text-right whitespace-nowrap">MRP</th>}
-                            {printConf.tableColumns.unit && <th className="px-2 py-1.5 text-center whitespace-nowrap">Unit</th>}
-                            {printConf.tableColumns.quantity && <th className="px-2 py-1.5 text-right whitespace-nowrap">Qty</th>}
-                            {printConf.tableColumns.price && <th className="px-2 py-1.5 text-right whitespace-nowrap">Rate</th>}
-                            {printConf.tableColumns.discount && <th className="px-2 py-1.5 text-right whitespace-nowrap">Disc %</th>}
-                            {printConf.tableColumns.taxPercent && <th className="px-2 py-1.5 text-right whitespace-nowrap">GST %</th>}
-                            {printConf.tableColumns.taxAmount && <th className="px-2 py-1.5 text-right whitespace-nowrap">GST Amt</th>}
-                            {printConf.tableColumns.total && <th className="px-2 py-1.5 text-right whitespace-nowrap">Total ({curr})</th>}
-                          </tr>
-                        </thead>
+                    {(() => {
+                      const activeColsCount = Object.values(printConf.tableColumns).filter(Boolean).length;
+                      const isDenseCols = activeColsCount >= 7;
+                      const isUltraDenseCols = activeColsCount >= 10;
+                      const thPad = isUltraDenseCols ? 'px-1 py-1 text-[9px] leading-tight' : isDenseCols ? 'px-1.5 py-1 text-[10px] leading-tight' : 'px-2 py-1.5 text-xs';
+                      const tdPad = isUltraDenseCols ? 'px-1 py-1 text-[9.5px] leading-tight' : isDenseCols ? 'px-1.5 py-1 text-[10.5px] leading-tight' : 'px-2 py-1.5 text-[11px]';
 
-                        <tbody className="divide-y divide-slate-200 text-slate-800 text-[11px]">
-                          {/* Row 1 */}
-                          <tr className="hover:bg-slate-50 transition-colors">
-                            {printConf.tableColumns.serialNo && <td className="px-2 py-1.5 text-center font-mono text-slate-500 whitespace-nowrap">1</td>}
-                            {printConf.tableColumns.itemName && (
-                              <td className="px-2 py-1.5 font-bold text-slate-900 min-w-[130px]">
-                                Surgical Scalpel Handle #4 (Carbon Steel)
-                                <span className="block text-[9.5px] font-normal text-slate-400">Box of 100 sterile units</span>
-                              </td>
-                            )}
-                            {printConf.tableColumns.hsnSac && <td className="px-2 py-1.5 font-mono whitespace-nowrap">9018</td>}
-                            {printConf.tableColumns.batchNo && <td className="px-2 py-1.5 font-mono text-slate-600 whitespace-nowrap">SC-2409</td>}
-                            {printConf.tableColumns.expDate && <td className="px-2 py-1.5 font-mono text-slate-600 whitespace-nowrap">08/29</td>}
-                            {printConf.tableColumns.mfgDate && <td className="px-2 py-1.5 font-mono text-slate-500 whitespace-nowrap">09/24</td>}
-                            {printConf.tableColumns.mrp && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">550.00</td>}
-                            {printConf.tableColumns.unit && <td className="px-2 py-1.5 text-center text-slate-600 whitespace-nowrap">Box</td>}
-                            {printConf.tableColumns.quantity && <td className="px-2 py-1.5 text-right font-bold text-slate-900 whitespace-nowrap">10</td>}
-                            {printConf.tableColumns.price && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">450.00</td>}
-                            {printConf.tableColumns.discount && <td className="px-2 py-1.5 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap">5%</td>}
-                            {printConf.tableColumns.taxPercent && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">18%</td>}
-                            {printConf.tableColumns.taxAmount && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">769.50</td>}
-                            {printConf.tableColumns.total && <td className="px-2 py-1.5 text-right font-bold font-mono text-slate-900 whitespace-nowrap">5,044.50</td>}
-                          </tr>
+                      return (
+                        <div className="border border-slate-300 rounded-xl overflow-hidden shadow-2xs w-full">
+                          <table className="w-full text-left border-collapse table-auto">
+                            <thead>
+                              <tr 
+                                className="font-bold border-b border-slate-300 text-slate-800"
+                                style={{ 
+                                  backgroundColor: printConf.theme === 'A4_MODERN_MINIMAL' 
+                                    ? '#f8fafc' 
+                                    : `${activeThemeColor}14`
+                                }}
+                              >
+                                {printConf.tableColumns.serialNo && <th className={`${thPad} text-center w-6`}>#</th>}
+                                {printConf.tableColumns.itemName && <th className={`${thPad} min-w-[90px]`}>Item Description</th>}
+                                {printConf.tableColumns.hsnSac && <th className={`${thPad} text-center`}>HSN</th>}
+                                {printConf.tableColumns.batchNo && <th className={`${thPad} text-center`}>Batch</th>}
+                                {printConf.tableColumns.expDate && <th className={`${thPad} text-center`}>Exp</th>}
+                                {printConf.tableColumns.mfgDate && <th className={`${thPad} text-center`}>Mfg</th>}
+                                {printConf.tableColumns.mrp && <th className={`${thPad} text-right`}>MRP</th>}
+                                {printConf.tableColumns.unit && <th className={`${thPad} text-center`}>Unit</th>}
+                                {printConf.tableColumns.quantity && <th className={`${thPad} text-right`}>Qty</th>}
+                                {printConf.tableColumns.price && <th className={`${thPad} text-right`}>Rate</th>}
+                                {printConf.tableColumns.discount && <th className={`${thPad} text-right`}>Disc%</th>}
+                                {printConf.tableColumns.taxPercent && <th className={`${thPad} text-right`}>GST%</th>}
+                                {printConf.tableColumns.taxAmount && <th className={`${thPad} text-right`}>GST Amt</th>}
+                                {printConf.tableColumns.total && <th className={`${thPad} text-right`}>Total ({curr})</th>}
+                              </tr>
+                            </thead>
 
-                          {/* Row 2 */}
-                          <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                            {printConf.tableColumns.serialNo && <td className="px-2 py-1.5 text-center font-mono text-slate-500 whitespace-nowrap">2</td>}
-                            {printConf.tableColumns.itemName && (
-                              <td className="px-2 py-1.5 font-bold text-slate-900 min-w-[130px]">
-                                Artery Forceps Straight 6" Stainless
-                                <span className="block text-[9.5px] font-normal text-slate-400">German grade autoclavable</span>
-                              </td>
-                            )}
-                            {printConf.tableColumns.hsnSac && <td className="px-2 py-1.5 font-mono whitespace-nowrap">9018</td>}
-                            {printConf.tableColumns.batchNo && <td className="px-2 py-1.5 font-mono text-slate-600 whitespace-nowrap">AF-1102</td>}
-                            {printConf.tableColumns.expDate && <td className="px-2 py-1.5 font-mono text-slate-600 whitespace-nowrap">12/30</td>}
-                            {printConf.tableColumns.mfgDate && <td className="px-2 py-1.5 font-mono text-slate-500 whitespace-nowrap">01/25</td>}
-                            {printConf.tableColumns.mrp && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">1,000.00</td>}
-                            {printConf.tableColumns.unit && <td className="px-2 py-1.5 text-center text-slate-600 whitespace-nowrap">Pcs</td>}
-                            {printConf.tableColumns.quantity && <td className="px-2 py-1.5 text-right font-bold text-slate-900 whitespace-nowrap">5</td>}
-                            {printConf.tableColumns.price && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">850.00</td>}
-                            {printConf.tableColumns.discount && <td className="px-2 py-1.5 text-right font-mono text-slate-400 whitespace-nowrap">0%</td>}
-                            {printConf.tableColumns.taxPercent && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">18%</td>}
-                            {printConf.tableColumns.taxAmount && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">765.00</td>}
-                            {printConf.tableColumns.total && <td className="px-2 py-1.5 text-right font-bold font-mono text-slate-900 whitespace-nowrap">5,015.00</td>}
-                          </tr>
+                            <tbody className="divide-y divide-slate-200 text-slate-800">
+                              {/* Row 1 */}
+                              <tr className="hover:bg-slate-50 transition-colors">
+                                {printConf.tableColumns.serialNo && <td className={`${tdPad} text-center font-mono text-slate-500`}>1</td>}
+                                {printConf.tableColumns.itemName && (
+                                  <td className={`${tdPad} font-bold text-slate-900 break-words leading-tight`}>
+                                    Surgical Scalpel Handle #4 (Carbon Steel)
+                                    <span className="block text-[8.5px] font-normal text-slate-400 leading-tight">Box of 100 sterile units</span>
+                                  </td>
+                                )}
+                                {printConf.tableColumns.hsnSac && <td className={`${tdPad} font-mono text-center`}>9018</td>}
+                                {printConf.tableColumns.batchNo && <td className={`${tdPad} font-mono text-slate-600 text-center`}>SC-2409</td>}
+                                {printConf.tableColumns.expDate && <td className={`${tdPad} font-mono text-slate-600 text-center`}>08/29</td>}
+                                {printConf.tableColumns.mfgDate && <td className={`${tdPad} font-mono text-slate-500 text-center`}>09/24</td>}
+                                {printConf.tableColumns.mrp && <td className={`${tdPad} text-right font-mono`}>550.00</td>}
+                                {printConf.tableColumns.unit && <td className={`${tdPad} text-center text-slate-600`}>Box</td>}
+                                {printConf.tableColumns.quantity && <td className={`${tdPad} text-right font-bold text-slate-900`}>10</td>}
+                                {printConf.tableColumns.price && <td className={`${tdPad} text-right font-mono`}>450.00</td>}
+                                {printConf.tableColumns.discount && <td className={`${tdPad} text-right font-mono text-emerald-700 font-semibold`}>5%</td>}
+                                {printConf.tableColumns.taxPercent && <td className={`${tdPad} text-right font-mono`}>18%</td>}
+                                {printConf.tableColumns.taxAmount && <td className={`${tdPad} text-right font-mono`}>769.50</td>}
+                                {printConf.tableColumns.total && <td className={`${tdPad} text-right font-bold font-mono text-slate-900`}>5,044.50</td>}
+                              </tr>
 
-                          {/* Row 3 */}
-                          <tr className="hover:bg-slate-50 transition-colors">
-                            {printConf.tableColumns.serialNo && <td className="px-2 py-1.5 text-center font-mono text-slate-500 whitespace-nowrap">3</td>}
-                            {printConf.tableColumns.itemName && (
-                              <td className="px-2 py-1.5 font-bold text-slate-900 min-w-[130px]">
-                                Sterile Disposable Examination Gloves (M)
-                                <span className="block text-[9.5px] font-normal text-slate-400">Nitrile powder-free pack of 100</span>
-                              </td>
-                            )}
-                            {printConf.tableColumns.hsnSac && <td className="px-2 py-1.5 font-mono whitespace-nowrap">4015</td>}
-                            {printConf.tableColumns.batchNo && <td className="px-2 py-1.5 font-mono text-slate-600 whitespace-nowrap">GL-9932</td>}
-                            {printConf.tableColumns.expDate && <td className="px-2 py-1.5 font-mono text-slate-600 whitespace-nowrap">05/29</td>}
-                            {printConf.tableColumns.mfgDate && <td className="px-2 py-1.5 font-mono text-slate-500 whitespace-nowrap">06/24</td>}
-                            {printConf.tableColumns.mrp && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">1,400.00</td>}
-                            {printConf.tableColumns.unit && <td className="px-2 py-1.5 text-center text-slate-600 whitespace-nowrap">Box</td>}
-                            {printConf.tableColumns.quantity && <td className="px-2 py-1.5 text-right font-bold text-slate-900 whitespace-nowrap">2</td>}
-                            {printConf.tableColumns.price && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">1,200.00</td>}
-                            {printConf.tableColumns.discount && <td className="px-2 py-1.5 text-right font-mono text-emerald-700 font-semibold whitespace-nowrap">10%</td>}
-                            {printConf.tableColumns.taxPercent && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">18%</td>}
-                            {printConf.tableColumns.taxAmount && <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">388.80</td>}
-                            {printConf.tableColumns.total && <td className="px-2 py-1.5 text-right font-bold font-mono text-slate-900 whitespace-nowrap">2,548.80</td>}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                              {/* Row 2 */}
+                              <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                                {printConf.tableColumns.serialNo && <td className={`${tdPad} text-center font-mono text-slate-500`}>2</td>}
+                                {printConf.tableColumns.itemName && (
+                                  <td className={`${tdPad} font-bold text-slate-900 break-words leading-tight`}>
+                                    Artery Forceps Straight 6" Stainless
+                                    <span className="block text-[8.5px] font-normal text-slate-400 leading-tight">German grade autoclavable</span>
+                                  </td>
+                                )}
+                                {printConf.tableColumns.hsnSac && <td className={`${tdPad} font-mono text-center`}>9018</td>}
+                                {printConf.tableColumns.batchNo && <td className={`${tdPad} font-mono text-slate-600 text-center`}>AF-1102</td>}
+                                {printConf.tableColumns.expDate && <td className={`${tdPad} font-mono text-slate-600 text-center`}>12/30</td>}
+                                {printConf.tableColumns.mfgDate && <td className={`${tdPad} font-mono text-slate-500 text-center`}>01/25</td>}
+                                {printConf.tableColumns.mrp && <td className={`${tdPad} text-right font-mono`}>1,000.00</td>}
+                                {printConf.tableColumns.unit && <td className={`${tdPad} text-center text-slate-600`}>Pcs</td>}
+                                {printConf.tableColumns.quantity && <td className={`${tdPad} text-right font-bold text-slate-900`}>5</td>}
+                                {printConf.tableColumns.price && <td className={`${tdPad} text-right font-mono`}>850.00</td>}
+                                {printConf.tableColumns.discount && <td className={`${tdPad} text-right font-mono text-slate-400`}>0%</td>}
+                                {printConf.tableColumns.taxPercent && <td className={`${tdPad} text-right font-mono`}>18%</td>}
+                                {printConf.tableColumns.taxAmount && <td className={`${tdPad} text-right font-mono`}>765.00</td>}
+                                {printConf.tableColumns.total && <td className={`${tdPad} text-right font-bold font-mono text-slate-900`}>5,015.00</td>}
+                              </tr>
+
+                              {/* Row 3 */}
+                              <tr className="hover:bg-slate-50 transition-colors">
+                                {printConf.tableColumns.serialNo && <td className={`${tdPad} text-center font-mono text-slate-500`}>3</td>}
+                                {printConf.tableColumns.itemName && (
+                                  <td className={`${tdPad} font-bold text-slate-900 break-words leading-tight`}>
+                                    Sterile Disposable Examination Gloves (M)
+                                    <span className="block text-[8.5px] font-normal text-slate-400 leading-tight">Nitrile powder-free pack of 100</span>
+                                  </td>
+                                )}
+                                {printConf.tableColumns.hsnSac && <td className={`${tdPad} font-mono text-center`}>4015</td>}
+                                {printConf.tableColumns.batchNo && <td className={`${tdPad} font-mono text-slate-600 text-center`}>GL-9932</td>}
+                                {printConf.tableColumns.expDate && <td className={`${tdPad} font-mono text-slate-600 text-center`}>05/29</td>}
+                                {printConf.tableColumns.mfgDate && <td className={`${tdPad} font-mono text-slate-500 text-center`}>06/24</td>}
+                                {printConf.tableColumns.mrp && <td className={`${tdPad} text-right font-mono`}>1,400.00</td>}
+                                {printConf.tableColumns.unit && <td className={`${tdPad} text-center text-slate-600`}>Box</td>}
+                                {printConf.tableColumns.quantity && <td className={`${tdPad} text-right font-bold text-slate-900`}>2</td>}
+                                {printConf.tableColumns.price && <td className={`${tdPad} text-right font-mono`}>1,200.00</td>}
+                                {printConf.tableColumns.discount && <td className={`${tdPad} text-right font-mono text-emerald-700 font-semibold`}>10%</td>}
+                                {printConf.tableColumns.taxPercent && <td className={`${tdPad} text-right font-mono`}>18%</td>}
+                                {printConf.tableColumns.taxAmount && <td className={`${tdPad} text-right font-mono`}>388.80</td>}
+                                {printConf.tableColumns.total && <td className={`${tdPad} text-right font-bold font-mono text-slate-900`}>2,548.80</td>}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
 
                     {/* =========================================================
                         SUMMARY, TOTALS, BANK & LEGAL FOOTER
@@ -1473,7 +1523,7 @@ export const PrintTab: React.FC = () => {
             RIGHT COLUMN (5 cols): PRINT CUSTOMIZATION BAR
             User: "me print ke is baar me chagnig karta ho ro left side bill me live change ho"
             ========================================================================= */}
-        <div className="lg:col-span-5 xl:col-span-5 space-y-4 sticky top-4">
+        <div className={`${isPreviewExpanded ? 'hidden' : 'lg:col-span-5 xl:col-span-5'} space-y-4 sticky top-4`}>
           
           {/* Customization Bar Card */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">

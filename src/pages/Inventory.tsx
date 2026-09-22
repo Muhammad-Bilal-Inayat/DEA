@@ -60,7 +60,7 @@ interface ItemTransaction {
 }
 
 export const Inventory: React.FC = () => {
-  const { userProfile } = useAuth();
+  const { userProfile, canViewCostsAndProfit } = useAuth();
   const { settings } = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
@@ -1385,7 +1385,7 @@ export const Inventory: React.FC = () => {
                         PURCHASE PRICE:
                       </div>
                       <div className="text-slate-800 font-bold text-sm mt-0.5 font-mono">
-                        Rs {activeMedicine.purchasePrice ? activeMedicine.purchasePrice.toFixed(2) : '67.00'}
+                        {canViewCostsAndProfit ? `Rs ${activeMedicine.purchasePrice ? activeMedicine.purchasePrice.toFixed(2) : '67.00'}` : '••••••'}
                       </div>
                     </div>
 
@@ -1407,7 +1407,7 @@ export const Inventory: React.FC = () => {
                         STOCK VALUE:
                       </div>
                       <div className="text-[#10b981] font-bold text-sm mt-0.5 font-mono">
-                        Rs {((activeMedicine.quantity > 0 ? activeMedicine.quantity : 0) * (activeMedicine.purchasePrice || 0)).toFixed(2)}
+                        {canViewCostsAndProfit ? `Rs ${((activeMedicine.quantity > 0 ? activeMedicine.quantity : 0) * (activeMedicine.purchasePrice || 0)).toFixed(2)}` : '••••••'}
                       </div>
                     </div>
 
@@ -1555,7 +1555,7 @@ export const Inventory: React.FC = () => {
                                       {b.quantity} {activeMedicine.unit || 'Box'}
                                     </td>
                                     <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                                      Rs {b.purchasePrice.toFixed(2)}
+                                      {canViewCostsAndProfit ? `Rs ${b.purchasePrice.toFixed(2)}` : '••••••'}
                                     </td>
                                     <td className="py-2.5 px-3 text-right font-mono font-bold text-blue-700">
                                       Rs {b.sellingPrice.toFixed(2)}

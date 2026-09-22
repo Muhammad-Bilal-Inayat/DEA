@@ -832,10 +832,10 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                           >
                             {cols.serialNo && <td className="px-1.5 py-1 text-center font-mono text-slate-500 text-[10px]">{idx + 1}</td>}
                             {cols.itemName && (
-                              <td className="px-1.5 py-1 font-bold text-slate-900 leading-tight">
-                                <div>{item.name}</div>
+                              <td className="px-1.5 py-1 font-bold text-slate-900 leading-tight min-w-[90px] break-words">
+                                <div className="break-words">{item.name}</div>
                                 {item.batchNumber && !cols.batchNo && (
-                                  <span className="block text-[9px] font-mono text-slate-400 font-normal">
+                                  <span className="block text-[9px] font-mono text-slate-400 font-normal break-words">
                                     Batch: {item.batchNumber} {item.expiryDate ? `| Exp: ${item.expiryDate}` : ''}
                                   </span>
                                 )}
@@ -1052,24 +1052,29 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
 
                       <div className="py-2 border-b border-dashed border-slate-400">
                         <div className="flex justify-between font-bold text-[10px] pb-1 border-b border-dashed border-slate-300">
-                          <span>ITEM</span>
-                          <span>QTY x PRICE</span>
-                          <span>AMT</span>
+                          <span>ITEM / DESCRIPTION</span>
+                          <span>AMOUNT</span>
                         </div>
-                        {invoice.items.map((it, idx) => (
-                          <div key={idx} className="text-[10px] py-1 border-b border-slate-100 last:border-0">
-                            <div className="font-bold truncate">{it.name}</div>
-                            {it.batchNumber && (
-                              <div className="text-[9px] text-slate-500 font-sans">
-                                B: {it.batchNumber} {it.expiryDate ? `| Exp: ${it.expiryDate.slice(0, 7)}` : ''}
+                        <div className="divide-y divide-dashed divide-slate-200 py-1 space-y-1.5">
+                          {invoice.items.map((it, idx) => (
+                            <div key={idx} className="pt-1 space-y-0.5 text-[10px]">
+                              {/* Line 1: Item description full width, zero overlap, word-break */}
+                              <div className="font-bold text-slate-900 break-words leading-tight">
+                                {idx + 1}. {it.name}
                               </div>
-                            )}
-                            <div className="flex justify-between text-slate-600">
-                              <span>{it.quantity} x {(it.sellingPrice || it.pricePerUnit || 0)}</span>
-                              <span className="font-bold text-slate-900">{it.total}</span>
+                              {it.batchNumber && (
+                                <div className="text-[9px] text-slate-500 font-mono pl-2">
+                                  Batch: {it.batchNumber} {it.expiryDate ? `| Exp: ${it.expiryDate.slice(0, 7)}` : ''}
+                                </div>
+                              )}
+                              {/* Line 2: 2nd line text with quantity x price on left, amount on right */}
+                              <div className="flex justify-between items-center text-slate-700 pl-2 font-mono text-[9.5px]">
+                                <span>{it.quantity} {it.unit || 'Pcs'} x {(it.sellingPrice || it.pricePerUnit || 0)}</span>
+                                <span className="font-bold text-slate-900">{curr} {it.total}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
 
                       <div className="py-2 space-y-1 text-[11px] border-b border-dashed border-slate-400 font-bold">
@@ -1131,23 +1136,27 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Medicine items with distinct batch / expiry boxes */}
+                      {/* Medicine items with 2-line layout, zero text merging */}
                       <div className="py-1 space-y-1.5 border-b border-slate-300">
                         <div className="text-[9.5px] font-bold uppercase text-slate-700 flex justify-between">
                           <span>Prescribed Medicine</span>
                           <span>Amount</span>
                         </div>
                         {invoice.items.map((it, idx) => (
-                          <div key={idx} className="p-1.5 bg-slate-50 rounded border border-slate-200 text-[10px] space-y-0.5">
-                            <div className="flex justify-between font-bold text-slate-900">
-                              <span>{idx + 1}. {it.name}</span>
-                              <span>{curr} {it.total}</span>
+                          <div key={idx} className="p-1.5 bg-slate-50 rounded border border-slate-200 text-[10px] space-y-1">
+                            {/* Line 1: Item name, word break */}
+                            <div className="font-bold text-slate-900 break-words leading-tight">
+                              {idx + 1}. {it.name}
                             </div>
-                            <div className="flex justify-between text-[9px] text-slate-600">
-                              <span className="font-mono bg-white px-1 border border-slate-200 rounded">
+                            {(it.batchNumber || it.expiryDate) && (
+                              <div className="text-[9px] text-emerald-800 font-mono">
                                 Batch: {it.batchNumber || 'N/A'} | Exp: {it.expiryDate ? it.expiryDate.slice(0, 7) : 'N/A'}
-                              </span>
-                              <span className="font-bold">Qty: {it.quantity}</span>
+                              </div>
+                            )}
+                            {/* Line 2: Qty x Rate on left, amount on right */}
+                            <div className="flex justify-between items-center text-[9.5px] text-slate-700 font-mono pl-1">
+                              <span>{it.quantity} {it.unit || 'Pcs'} x {(it.sellingPrice || it.pricePerUnit || 0)}</span>
+                              <span className="font-bold text-slate-900">{curr} {it.total}</span>
                             </div>
                           </div>
                         ))}
@@ -1192,14 +1201,17 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Compact items list */}
-                      <div className="py-1 border-b border-slate-200 text-[10px] space-y-1">
+                      {/* Compact items list with 2-line layout */}
+                      <div className="py-1 border-b border-slate-200 text-[10px] space-y-1.5">
                         {invoice.items.map((it, idx) => (
-                          <div key={idx} className="flex justify-between items-center">
-                            <span className="truncate max-w-[200px]">
-                              {it.quantity}x {it.name}
-                            </span>
-                            <span className="font-mono font-bold">{it.total}</span>
+                          <div key={idx} className="space-y-0.5 border-b border-slate-100 last:border-0 pb-1">
+                            <div className="font-bold text-slate-900 break-words leading-tight">
+                              {idx + 1}. {it.name}
+                            </div>
+                            <div className="flex justify-between items-center text-slate-600 pl-2 font-mono text-[9.5px]">
+                              <span>{it.quantity} {it.unit || 'Pcs'} x {(it.sellingPrice || it.pricePerUnit || 0)}</span>
+                              <span className="font-bold text-slate-900">{curr} {it.total}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1234,11 +1246,14 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         <div>Date: {invoice.date.slice(0, 10)}</div>
                         <div>Customer: {invoice.customerName}</div>
                       </div>
-                      <div className="py-2 border-b border-dashed border-slate-400">
+                      <div className="py-2 border-b border-dashed border-slate-400 space-y-1.5">
                         {invoice.items.map((it, idx) => (
-                          <div key={idx} className="text-[10px] py-0.5 flex justify-between">
-                            <span>{it.quantity}x {it.name}</span>
-                            <span className="font-bold">{it.total}</span>
+                          <div key={idx} className="text-[10px] space-y-0.5 border-b border-dashed border-slate-100 last:border-0 pb-1">
+                            <div className="font-bold text-slate-900 break-words leading-tight">{idx + 1}. {it.name}</div>
+                            <div className="flex justify-between text-slate-700 pl-2 font-mono text-[9.5px]">
+                              <span>{it.quantity} x {(it.sellingPrice || it.pricePerUnit || 0)}</span>
+                              <span className="font-bold text-slate-900">{curr} {it.total}</span>
+                            </div>
                           </div>
                         ))}
                       </div>

@@ -149,6 +149,21 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function RoleAccessGuard({ children }: { children: React.ReactNode }) {
   const { activeRole, activeUser, setActiveRole, setActiveUser, business, tenant, currentUser, userProfile, tenantId } = useAuth();
   const location = useLocation();
+  const [permissionVersion, setPermissionVersion] = useState<number>(0);
+
+  useEffect(() => {
+    const handlePermissionsUpdated = () => {
+      setPermissionVersion(v => v + 1);
+    };
+    window.addEventListener('mbi-user-access-profile-updated', handlePermissionsUpdated);
+    window.addEventListener('mbi-effective-permissions-updated', handlePermissionsUpdated);
+    window.addEventListener('storage', handlePermissionsUpdated);
+    return () => {
+      window.removeEventListener('mbi-user-access-profile-updated', handlePermissionsUpdated);
+      window.removeEventListener('mbi-effective-permissions-updated', handlePermissionsUpdated);
+      window.removeEventListener('storage', handlePermissionsUpdated);
+    };
+  }, []);
 
   // Save active route so reloading/refreshing re-opens the same page
   useEffect(() => {
@@ -177,7 +192,7 @@ function RoleAccessGuard({ children }: { children: React.ReactNode }) {
   
   const granularCheck = checkGranularRouteAccess(location.pathname, {
     role: activeRole,
-    userId: activeUser?.id,
+    userId: activeUser?.id || currentUser?.uid,
     plan: (tenant as any)?.plan || (business as any)?.plan || 'Standard POS',
     tenantId: tenant?.tenantId || tenant?.id || tenantId
   });

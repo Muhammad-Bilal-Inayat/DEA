@@ -20,12 +20,19 @@ import {
   ExternalLink,
   DollarSign,
   Copy,
-  Check
+  Check,
+  PlusCircle,
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   getCheckoutOrders, 
   updateOrderStatus, 
   deleteCheckoutOrder, 
+  removeOrderScreenshot,
+  createTestCheckoutOrder,
+  resetCheckoutOrdersToDefault,
+  clearAllCheckoutOrders,
   CheckoutOrder,
   PAYMENT_ACCOUNTS 
 } from '../../lib/checkoutOrderService';
@@ -38,12 +45,27 @@ export const CheckoutOrdersManagerPanel: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // In-app modal confirmation states (replaces iframe-blocked window.confirm)
+  const [orderToDelete, setOrderToDelete] = useState<CheckoutOrder | null>(null);
+  const [orderToApprove, setOrderToApprove] = useState<CheckoutOrder | null>(null);
+  const [orderToReject, setOrderToReject] = useState<CheckoutOrder | null>(null);
+  const [orderToRemoveSS, setOrderToRemoveSS] = useState<CheckoutOrder | null>(null);
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+
   const refreshOrders = () => {
     setOrders(getCheckoutOrders());
   };
 
   useEffect(() => {
     refreshOrders();
+
+    const handleUpdated = () => refreshOrders();
+    window.addEventListener('mbi_checkout_orders_updated', handleUpdated);
+    window.addEventListener('storage', handleUpdated);
+    return () => {
+      window.removeEventListener('mbi_checkout_orders_updated', handleUpdated);
+      window.removeEventListener('storage', handleUpdated);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -51,43 +73,72 @@ export const CheckoutOrdersManagerPanel: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleApprove = (order: CheckoutOrder) => {
-    if (window.confirm(`Approve software subscription order for "${order.businessName}" (${order.planName})? This will generate a valid software license and auto-activate their workspace.`)) {
-      const updated = updateOrderStatus(order.id, 'approved');
-      refreshOrders();
-      if (updated) {
-        showToast(`Order approved! License generated: ${updated.licenseKeyGenerated}`);
-        
-        // Open WhatsApp confirmation with details pre-filled
-        const text = encodeURIComponent(
-          `🎉 *MBI Inventra Software Order Approved!*\n\n` +
-          `Dear *${order.ownerName}*,\n` +
-          `Your subscription payment for *${order.businessName}* has been verified!\n\n` +
-          `*Plan:* ${order.planName}\n` +
-          `*License Key:* ${updated.licenseKeyGenerated}\n` +
-          `*Login Username:* ${order.username}\n\n` +
-          `You can now sign in to your workspace at: ${window.location.origin}/login\n\n` +
-          `Need help? Contact M.Bilal Inayat support on WhatsApp anytime.`
-        );
+  const executeApprove = (order: CheckoutOrder) => {
+    const updated = updateOrderStatus(order.id, 'approved');
+    refreshOrders();
+    setOrderToApprove(null);
+    if (updated) {
+      showToast(`Order approved! License generated: ${updated.licenseKeyGenerated}`);
+      
+      // Open WhatsApp confirmation with details pre-filled
+      const text = encodeURIComponent(
+        `🎉 *MBI Inventra Software Order Approved!*\n\n` +
+        `Dear *${order.ownerName}*,\n` +
+        `Your subscription payment for *${order.businessName}* has been verified!\n\n` +
+        `*Plan:* ${order.planName}\n` +
+        `*License Key:* ${updated.licenseKeyGenerated}\n` +
+        `*Login Username:* ${order.username}\n\n` +
+        `You can now sign in to your workspace at: ${window.location.origin}/login\n\n` +
+        `Need help? Contact M.Bilal Inayat support on WhatsApp anytime.`
+      );
+      try {
         window.open(`https://wa.me/${order.whatsapp.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
-      }
+      } catch {}
     }
   };
 
-  const handleReject = (order: CheckoutOrder) => {
-    if (window.confirm(`Reject payment proof for "${order.businessName}"?`)) {
-      updateOrderStatus(order.id, 'rejected');
-      refreshOrders();
-      showToast(`Order ${order.id} marked as Rejected.`);
+  const executeReject = (order: CheckoutOrder) => {
+    updateOrderStatus(order.id, 'rejected');
+    refreshOrders();
+    setOrderToReject(null);
+    showToast(`Order ${order.id} marked as Rejected.`);
+  };
+
+  const executeDelete = (order: CheckoutOrder) => {
+    const success = deleteCheckoutOrder(order.id);
+    refreshOrders();
+    setOrderToDelete(null);
+    if (success) {
+      showToast(`Order ${order.id} for "${order.businessName}" deleted successfully.`);
+    } else {
+      showToast(`Order record deleted.`);
     }
   };
 
-  const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Delete order record for "${name}"?`)) {
-      deleteCheckoutOrder(id);
-      refreshOrders();
-      showToast('Order record deleted.');
-    }
+  const executeRemoveScreenshot = (order: CheckoutOrder) => {
+    removeOrderScreenshot(order.id);
+    refreshOrders();
+    setOrderToRemoveSS(null);
+    showToast(`Payment screenshot removed for order ${order.id}.`);
+  };
+
+  const handleCreateTestOrder = () => {
+    const newOrd = createTestCheckoutOrder();
+    refreshOrders();
+    showToast(`Sample test checkout order created: ${newOrd.id}`);
+  };
+
+  const handleResetDemo = () => {
+    resetCheckoutOrdersToDefault();
+    refreshOrders();
+    showToast('Reset sample checkout orders to default demo data.');
+  };
+
+  const handleClearAll = () => {
+    clearAllCheckoutOrders();
+    refreshOrders();
+    setShowClearAllModal(false);
+    showToast('All checkout orders deleted.');
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -136,7 +187,37 @@ export const CheckoutOrdersManagerPanel: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleCreateTestOrder}
+            className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            title="Create a sample checkout order with mock payment proof to test"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Add Test Order</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResetDemo}
+            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            title="Reset to default orders"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Demo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowClearAllModal(true)}
+            className="px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-800/40 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            title="Clear all orders"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear All</span>
+          </button>
+
           <a
             href="/checkout"
             target="_blank"
@@ -351,16 +432,24 @@ export const CheckoutOrdersManagerPanel: React.FC = () => {
                         className="w-20 h-16 rounded-xl object-cover border border-slate-700 bg-slate-900 shrink-0 cursor-pointer hover:scale-105 transition-all shadow-md"
                         onClick={() => setSelectedScreenshot(order.paymentScreenshot)}
                       />
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <button
                           type="button"
                           onClick={() => setSelectedScreenshot(order.paymentScreenshot)}
-                          className="px-3 py-1.5 rounded-xl bg-purple-600/20 text-purple-300 hover:bg-purple-600/30 border border-purple-500/30 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-all"
+                          className="px-2.5 py-1 rounded-lg bg-purple-600/20 text-purple-300 hover:bg-purple-600/30 border border-purple-500/30 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-all"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>View Full SS</span>
                         </button>
-                        <span className="text-[10px] text-slate-500 block">Click to enlarge</span>
+                        <button
+                          type="button"
+                          onClick={() => setOrderToRemoveSS(order)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 border border-rose-500/30 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-all"
+                          title="Remove attached payment screenshot"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete SS</span>
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -387,14 +476,16 @@ export const CheckoutOrdersManagerPanel: React.FC = () => {
                   {order.status === 'pending' && (
                     <>
                       <button
-                        onClick={() => handleReject(order)}
+                        type="button"
+                        onClick={() => setOrderToReject(order)}
                         className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-rose-300 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
                       >
                         Reject Order
                       </button>
 
                       <button
-                        onClick={() => handleApprove(order)}
+                        type="button"
+                        onClick={() => setOrderToApprove(order)}
                         className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer"
                       >
                         <CheckCircle2 className="w-4 h-4" />
@@ -404,9 +495,10 @@ export const CheckoutOrdersManagerPanel: React.FC = () => {
                   )}
 
                   <button
-                    onClick={() => handleDelete(order.id, order.businessName)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 border border-slate-700 transition-all cursor-pointer"
-                    title="Delete record"
+                    type="button"
+                    onClick={() => setOrderToDelete(order)}
+                    className="p-2.5 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-700 transition-all cursor-pointer"
+                    title="Delete order record permanently"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -416,6 +508,230 @@ export const CheckoutOrdersManagerPanel: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* 1. Modal: Confirm Delete Order */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Delete Order Record</h3>
+                <p className="text-xs text-slate-400">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1.5">
+              <div className="flex justify-between text-slate-400">
+                <span>Order ID:</span>
+                <span className="font-mono text-white font-bold">{orderToDelete.id}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Business Name:</span>
+                <span className="text-white font-bold">{orderToDelete.businessName}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Plan & Amount:</span>
+                <span className="text-emerald-400 font-bold">{orderToDelete.planName} • Rs. {orderToDelete.amountRupees.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Trx ID:</span>
+                <span className="font-mono text-amber-300">{orderToDelete.trxId}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToDelete(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => executeDelete(orderToDelete)}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Delete Order</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal: Confirm Approve Order */}
+      {orderToApprove && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center gap-3 text-emerald-400">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Approve Subscription Order</h3>
+                <p className="text-xs text-slate-400">Generate valid license key & activate tenant.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1.5">
+              <div className="flex justify-between text-slate-400">
+                <span>Client Store:</span>
+                <span className="text-white font-bold">{orderToApprove.businessName}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Owner:</span>
+                <span className="text-white font-bold">{orderToApprove.ownerName}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Selected Plan:</span>
+                <span className="text-emerald-400 font-bold">{orderToApprove.planName}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Payment Method & TRX:</span>
+                <span className="text-amber-300 font-mono">{orderToApprove.paymentMethod} • {orderToApprove.trxId}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToApprove(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => executeApprove(orderToApprove)}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirm & Activate</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal: Confirm Reject Order */}
+      {orderToReject && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center gap-3 text-amber-400">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <XCircle className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Reject Payment Proof</h3>
+                <p className="text-xs text-slate-400">Mark this transaction as rejected/unverified.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Are you sure you want to mark order <strong className="text-white">{orderToReject.id}</strong> ({orderToReject.businessName}) as rejected?
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToReject(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => executeReject(orderToReject)}
+                className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-black transition-all cursor-pointer"
+              >
+                Mark as Rejected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Modal: Confirm Remove Screenshot (SS) */}
+      {orderToRemoveSS && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <ImageIcon className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Remove Payment Screenshot</h3>
+                <p className="text-xs text-slate-400">Detaches the uploaded image proof from order.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Remove the payment proof screenshot from order <strong className="text-white">{orderToRemoveSS.id}</strong> ({orderToRemoveSS.businessName})?
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToRemoveSS(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => executeRemoveScreenshot(orderToRemoveSS)}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete SS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Modal: Confirm Clear All Orders */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Clear All Checkout Orders</h3>
+                <p className="text-xs text-slate-400">Permanently remove all order records.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              This will remove all <strong className="text-white">{orders.length} order records</strong> from the local database. You can restore sample demo orders at any time using the &quot;Reset Demo&quot; button.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearAllModal(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Clear All</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full Screenshot Preview Modal */}
       {selectedScreenshot && (

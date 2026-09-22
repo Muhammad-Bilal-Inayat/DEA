@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { User, Business, UserRole, AppUserRecord, Tenant, TenantFeatureToggles, DEFAULT_TENANT_FEATURE_TOGGLES, InvoiceEditAuditRecord } from '../types';
 import { generateSeedData } from '../lib/seedData';
 import { ROLE_DEFINITIONS, normalizeUserRole } from '../lib/permissions';
@@ -68,6 +68,10 @@ interface AuthContextType {
   // RBAC & Permission helpers
   canEditInvoices: boolean;
   canEditBills: boolean;
+  canDeleteBills: boolean;
+  canReprintBills: boolean;
+  canViewCostsAndProfit: boolean;
+  canApplyDiscount: boolean;
   isPrimaryAdmin: boolean;
   isGuest: boolean;
 
@@ -208,9 +212,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isGuest = !currentUser || currentUser.isGuest || currentUser.role === 'Guest' || currentUser.email === 'guest@mbinventra.com';
   const isPrimaryAdmin = activeRole === 'Primary Admin';
 
-  // Check if invoice editing is permitted for active user/role
-  const canEditBills = activeRole === 'Primary Admin' || (activeUser?.canEditInvoices ?? (ROLE_DEFINITIONS[activeRole]?.features?.canEditBills ?? false));
+  // Live Permission Version counter to guarantee instantaneous reactive updates
+  const [permissionVersion, setPermissionVersion] = useState<number>(0);
+
+  useEffect(() => {
+    const handlePermissionsUpdated = () => {
+      setPermissionVersion(v => v + 1);
+    };
+    window.addEventListener('mbi-user-access-profile-updated', handlePermissionsUpdated);
+    window.addEventListener('mbi-effective-permissions-updated', handlePermissionsUpdated);
+    window.addEventListener('storage', handlePermissionsUpdated);
+    return () => {
+      window.removeEventListener('mbi-user-access-profile-updated', handlePermissionsUpdated);
+      window.removeEventListener('mbi-effective-permissions-updated', handlePermissionsUpdated);
+      window.removeEventListener('storage', handlePermissionsUpdated);
+    };
+  }, []);
+
+  const effectiveUserId = activeUser?.id || currentUser?.uid || userProfile?.id || 'usr_active';
+  const effectiveTenantId = tenant?.tenantId || tenant?.id || tenantId || 'mbi-tenant-main';
+  const effectivePlan = (tenant as any)?.plan || (business as any)?.plan || 'Standard POS';
+
+  // Dynamic Granular Permission Evaluations (Checks 173-Switchboard -> Plan -> Role Hierarchy)
+  const canEditBills = useMemo(() => {
+    return evaluatePermission({
+      userId: effectiveUserId,
+      role: activeRole,
+      plan: effectivePlan,
+      tenantId: effectiveTenantId,
+      feature: 'canEditBills'
+    });
+  }, [effectiveUserId, activeRole, effectivePlan, effectiveTenantId, permissionVersion, activeUser]);
+
   const canEditInvoices = canEditBills;
+
+  const canDeleteBills = useMemo(() => {
+    return evaluatePermission({
+      userId: effectiveUserId,
+      role: activeRole,
+      plan: effectivePlan,
+      tenantId: effectiveTenantId,
+      feature: 'canDeleteBills'
+    });
+  }, [effectiveUserId, activeRole, effectivePlan, effectiveTenantId, permissionVersion, activeUser]);
+
+  const canReprintBills = useMemo(() => {
+    return evaluatePermission({
+      userId: effectiveUserId,
+      role: activeRole,
+      plan: effectivePlan,
+      tenantId: effectiveTenantId,
+      feature: 'canReprintBills'
+    });
+  }, [effectiveUserId, activeRole, effectivePlan, effectiveTenantId, permissionVersion, activeUser]);
+
+  const canViewCostsAndProfit = useMemo(() => {
+    return evaluatePermission({
+      userId: effectiveUserId,
+      role: activeRole,
+      plan: effectivePlan,
+      tenantId: effectiveTenantId,
+      feature: 'canViewCostsAndProfit'
+    });
+  }, [effectiveUserId, activeRole, effectivePlan, effectiveTenantId, permissionVersion, activeUser]);
+
+  const canApplyDiscount = useMemo(() => {
+    return evaluatePermission({
+      userId: effectiveUserId,
+      role: activeRole,
+      plan: effectivePlan,
+      tenantId: effectiveTenantId,
+      feature: 'canApplyDiscount'
+    });
+  }, [effectiveUserId, activeRole, effectivePlan, effectiveTenantId, permissionVersion, activeUser]);
 
   // Check if tenant has specific feature toggle active based on Plan + Master Overrides
   const isFeatureEnabled = (feature: keyof TenantFeatureToggles): boolean => {
@@ -1277,65 +1351,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canAccess = (module: keyof typeof ROLE_DEFINITIONS['Primary Admin']['allowedModules']): boolean => {
     const perms = ROLE_DEFINITIONS[activeRole] || ROLE_DEFINITIONS['Primary Admin'];
     const roleAllowed = !!perms.allowedModules[module];
-    if (!roleAllowed) return false;
 
     // Granular Switchboard Check
-    const effectiveUserId = activeUser?.id || currentUser?.uid;
-    if (effectiveUserId) {
-      const moduleToMenuMap: Record<string, string> = {
-        dashboard: 'dashboard',
-        parties: 'parties',
-        items: 'items',
-        sale: 'sale',
-        purchase: 'purchase',
-        expenses: 'expenses',
-        bank: 'bank',
-        reports: 'reports',
-        settings: 'settings',
-        onlineStore: 'onlineStore',
-        utilities: 'utilities',
-        syncShare: 'syncShare',
-        backup: 'utilities'
-      };
-      const menuId = moduleToMenuMap[module as string] || (module as string);
-      return evaluatePermission({
-        userId: effectiveUserId,
-        role: activeRole,
-        plan: (tenant as any)?.plan || (business as any)?.plan || 'Standard POS',
-        tenantId: tenant?.tenantId || tenant?.id || tenantId,
-        menuId
-      });
-    }
+    const targetUid = effectiveUserId || 'usr_active';
+    const moduleToMenuMap: Record<string, { menuId: string; submenuId?: string; functionId?: string }> = {
+      dashboard: { menuId: 'dashboard' },
+      parties: { menuId: 'parties' },
+      items: { menuId: 'items' },
+      sale: { menuId: 'sale' },
+      purchase: { menuId: 'purchase' },
+      expenses: { menuId: 'expenses' },
+      bank: { menuId: 'bank' },
+      reports: { menuId: 'reports' },
+      settings: { menuId: 'settings' },
+      onlineStore: { menuId: 'onlineStore' },
+      utilities: { menuId: 'utilities' },
+      syncShare: { menuId: 'syncShare' },
+      backup: { menuId: 'utilities', functionId: 'manageBackups' }
+    };
+    const target = moduleToMenuMap[module as string] || { menuId: module as string };
+
+    const granularAllowed = evaluatePermission({
+      userId: targetUid,
+      role: activeRole,
+      plan: effectivePlan,
+      tenantId: effectiveTenantId,
+      menuId: target.menuId,
+      submenuId: target.submenuId,
+      functionId: target.functionId
+    });
+
+    if (!granularAllowed) return false;
+    if (!roleAllowed && activeRole !== 'Primary Admin') return false;
 
     return true;
   };
 
-  const canPerform = (feature: keyof typeof ROLE_DEFINITIONS['Primary Admin']['features']): boolean => {
-    const perms = ROLE_DEFINITIONS[activeRole] || ROLE_DEFINITIONS['Primary Admin'];
-    const roleAllowed = !!perms.features[feature];
-    if (!roleAllowed) return false;
-
-    // Granular Switchboard Check
-    const effectiveUserId = activeUser?.id || currentUser?.uid;
-    if (effectiveUserId) {
-      return evaluatePermission({
-        userId: effectiveUserId,
-        role: activeRole,
-        plan: (tenant as any)?.plan || (business as any)?.plan || 'Standard POS',
-        tenantId: tenant?.tenantId || tenant?.id || tenantId,
-        functionId: feature as string,
-        actionId: feature as string
-      });
-    }
-
-    return true;
+  const canPerform = (feature: keyof typeof ROLE_DEFINITIONS['Primary Admin']['features'] | string): boolean => {
+    return evaluatePermission({
+      userId: effectiveUserId,
+      role: activeRole,
+      plan: effectivePlan,
+      tenantId: effectiveTenantId,
+      feature: feature as string
+    });
   };
 
   return (
     <AuthContext.Provider 
       value={{ 
         currentUser, 
-        firebaseUser,
+        firebaseUser, 
         userProfile, 
         business, 
         activeRole,
@@ -1355,6 +1421,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // RBAC & Bill permissions
         canEditInvoices,
         canEditBills,
+        canDeleteBills,
+        canReprintBills,
+        canViewCostsAndProfit,
+        canApplyDiscount,
         isPrimaryAdmin,
         isGuest,
 

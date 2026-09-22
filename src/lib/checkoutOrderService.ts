@@ -236,14 +236,83 @@ export function updateOrderStatus(id: string, status: 'approved' | 'rejected'): 
 }
 
 export function deleteCheckoutOrder(id: string): boolean {
-  let orders = getCheckoutOrders();
-  const lenBefore = orders.length;
-  orders = orders.filter(o => o.id !== id);
-  if (orders.length !== lenBefore) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
-    } catch (e) {}
-    return true;
+  try {
+    let orders = getCheckoutOrders();
+    const lenBefore = orders.length;
+    const targetId = id.trim().toLowerCase();
+    orders = orders.filter(o => o.id.trim().toLowerCase() !== targetId);
+    
+    // Always persist updated orders list
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    window.dispatchEvent(new CustomEvent('mbi_checkout_orders_updated', { detail: { deletedId: id, remaining: orders.length } }));
+    return orders.length !== lenBefore;
+  } catch (e) {
+    console.error('Failed to delete checkout order:', e);
+    return false;
   }
-  return false;
+}
+
+export function removeOrderScreenshot(id: string): boolean {
+  try {
+    const orders = getCheckoutOrders();
+    const targetId = id.trim().toLowerCase();
+    const order = orders.find(o => o.id.trim().toLowerCase() === targetId);
+    if (order) {
+      order.paymentScreenshot = '';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+      window.dispatchEvent(new CustomEvent('mbi_checkout_orders_updated', { detail: { updatedId: id } }));
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error('Failed to remove screenshot:', e);
+    return false;
+  }
+}
+
+export function clearAllCheckoutOrders(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    window.dispatchEvent(new CustomEvent('mbi_checkout_orders_updated'));
+  } catch (e) {
+    console.error('Failed to clear checkout orders:', e);
+  }
+}
+
+export function resetCheckoutOrdersToDefault(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_ORDERS));
+    window.dispatchEvent(new CustomEvent('mbi_checkout_orders_updated'));
+  } catch (e) {
+    console.error('Failed to reset checkout orders:', e);
+  }
+}
+
+export function createTestCheckoutOrder(): CheckoutOrder {
+  const methods = ['EasyPaisa', 'JazzCash', 'Bank Transfer', 'Nayapay'] as const;
+  const plans = [
+    { id: 'standard', name: 'Standard POS Billing Plan', amount: 35000 },
+    { id: 'professional', name: 'Pharmacy Pro Plan', amount: 65000 },
+    { id: 'enterprise', name: 'Enterprise Ultimate Plan', amount: 120000 }
+  ];
+  const chosenPlan = plans[Math.floor(Math.random() * plans.length)];
+  const chosenMethod = methods[Math.floor(Math.random() * methods.length)];
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+
+  return saveCheckoutOrder({
+    businessName: `Test Pharmacy Store #${randomNum}`,
+    ownerName: `Test User ${randomNum}`,
+    whatsapp: `+92 300 ${randomNum}98`,
+    email: `teststore${randomNum}@example.com`,
+    city: 'Lahore',
+    username: `test_user_${randomNum}`,
+    planId: chosenPlan.id,
+    planName: chosenPlan.name,
+    billingInterval: 'annual',
+    amountRupees: chosenPlan.amount,
+    paymentMethod: chosenMethod,
+    paymentScreenshot: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80',
+    trxId: `TRX-${Date.now().toString().slice(-8)}`,
+    notes: 'Sample test order created from Master Server Console'
+  });
 }
