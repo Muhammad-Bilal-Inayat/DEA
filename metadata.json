@@ -1,0 +1,10 @@
+{
+  "name": "21 Pharma Inventory Manager",
+  "description": "Medicine stock \u0026 inventory management with offline mode.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

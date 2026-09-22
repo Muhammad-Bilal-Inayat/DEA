@@ -1,0 +1,72 @@
+# ----------------------------------------------------------------------
+# Hostinger Zero-PHP Static & SPA Configuration
+# Ensures maximum speed and zero PHP process consumption on Hostinger
+# ----------------------------------------------------------------------
+
+# Disable Directory Browsing
+Options -Indexes
+
+# Default charset
+AddDefaultCharset UTF-8
+
+# Ensure web server serves all static files directly with default-handler
+# Prevents any accidental PHP worker/LSAPI process invocation
+<FilesMatch "\.(html|htm|js|mjs|css|json|webmanifest|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|eot|xml|txt|map)$">
+  <IfModule mod_mime.c>
+    AddType application/javascript .js .mjs
+    AddType text/css .css
+    AddType application/manifest+json .webmanifest
+    AddType image/svg+xml .svg
+    AddType font/woff2 .woff2
+    AddType font/woff .woff
+  </IfModule>
+  SetHandler default-handler
+</FilesMatch>
+
+# Direct Gzip/Deflate compression via web server (no PHP compression script)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/xml image/svg+xml font/woff font/woff2
+</IfModule>
+
+# Browser Caching Headers for maximum performance
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 1 month"
+  
+  # HTML, Webmanifest & Service Workers: never cache to ensure instant app updates
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType application/manifest+json "access plus 0 seconds"
+  ExpiresByType application/json "access plus 0 seconds"
+  
+  # Static fingerprinted assets: 1 year cache
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+# Always revalidate un-hashed root entry files so new builds take effect immediately
+<FilesMatch "(app\.js|app\.css|sw\.js|registerSW\.js)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </IfModule>
+</FilesMatch>
+
+# SPA Routing: Route all non-file/non-directory requests cleanly to index.html (zero PHP)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Allow direct access to existing files and directories
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route all React SPA navigation routes to static index.html
+  RewriteRule ^ index.html [L]
+</IfModule>

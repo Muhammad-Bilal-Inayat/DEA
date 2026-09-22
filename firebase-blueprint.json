@@ -1,0 +1,302 @@
+{
+  "entities": {
+    "tenants": {
+      "title": "Tenant",
+      "description": "Multi-tenant business instance with trial and feature toggles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "licenseId": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "ownerPhone": { "type": "string" },
+        "plan": { "type": "string" },
+        "status": { "type": "string" },
+        "primaryAdminId": { "type": "string" },
+        "trialStartDate": { "type": "string" },
+        "trialExpiryDate": { "type": "string" },
+        "isTrialActive": { "type": "boolean" },
+        "trialExpired": { "type": "boolean" },
+        "paidLicenseActive": { "type": "boolean" },
+        "maxDevices": { "type": "number" },
+        "featureToggles": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "tenantId", "name", "ownerEmail", "plan", "status"]
+    },
+    "invoice_audits": {
+      "title": "InvoiceAudit",
+      "description": "Granular audit logs for invoice edits and revisions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "editedByUserId": { "type": "string" },
+        "editedByUserName": { "type": "string" },
+        "editedByUserRole": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "originalGrandTotal": { "type": "number" },
+        "newGrandTotal": { "type": "number" },
+        "editReason": { "type": "string" }
+      },
+      "required": ["id", "tenantId", "invoiceId", "invoiceNumber", "timestamp"]
+    },
+    "users": {
+      "title": "User",
+      "description": "User profile with role-based access information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["Primary Admin", "Admin", "Secondary Admin", "Store Manager", "Manager", "Cashier", "Sales Staff", "Staff", "Accountant", "Stock Keeper", "Biller"] },
+        "businessId": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "email", "name", "role"]
+    },
+    "businesses": {
+      "title": "Business",
+      "description": "Business company configuration and settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "members": { "type": "array", "items": { "type": "string" } },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "taxNumber": { "type": "string" },
+        "currency": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerUid"]
+    },
+    "audit_logs": {
+      "title": "AuditLog",
+      "description": "Immutable security and operational audit trails per business instance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "category": { "type": "string" },
+        "action": { "type": "string" },
+        "entity": { "type": "string" },
+        "entityId": { "type": "string" },
+        "details": { "type": "string" },
+        "severity": { "type": "string", "enum": ["info", "warning", "critical"] }
+      },
+      "required": ["id", "businessId", "timestamp", "action", "category"]
+    },
+    "admin_settings": {
+      "title": "AdminSettings",
+      "description": "Custom business feature flags, access controls, and operational policies",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "settings": { "type": "object" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "businessId", "settings"]
+    },
+    "medicines": {
+      "title": "Medicine",
+      "description": "Inventory stock items and pharmaceuticals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "name": { "type": "string" },
+        "genericName": { "type": "string" },
+        "category": { "type": "string" },
+        "stock": { "type": "number" },
+        "salePrice": { "type": "number" },
+        "purchasePrice": { "type": "number" },
+        "unit": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "invoices": {
+      "title": "Invoice",
+      "description": "Sales invoices, estimates, credit notes, and delivery challans",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "partyName": { "type": "string" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "date": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "invoiceNumber"]
+    },
+    "purchaseOrders": {
+      "title": "PurchaseOrder",
+      "description": "Purchase bills, orders, and returns",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "billNumber": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "suppliers": {
+      "title": "Party",
+      "description": "Customers and suppliers ledgers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "phone": { "type": "string" },
+        "balance": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "partyPayments": {
+      "title": "PartyPayment",
+      "description": "Payment In and Payment Out transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "partyName": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "amount"]
+    },
+    "expenses": {
+      "title": "Expense",
+      "description": "Business expense records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "amount"]
+    },
+    "bankTransactions": {
+      "title": "BankTransaction",
+      "description": "Cash and bank account transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "accountId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "amount"]
+    },
+    "dashboardSummaries": {
+      "title": "DashboardSummary",
+      "description": "Pre-aggregated non-granular metrics and sanitized safe summaries for dashboard performance and security",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "timeFilter": { "type": "string" },
+        "totalSale": { "type": "number" },
+        "totalPurchase": { "type": "number" },
+        "totalExpenses": { "type": "number" },
+        "stockValue": { "type": "number" },
+        "grossProfit": { "type": "number" },
+        "netProfit": { "type": "number" },
+        "profitMargin": { "type": "number" },
+        "todayInvoicesCount": { "type": "number" },
+        "todaySale": { "type": "number" },
+        "todayCogs": { "type": "number" },
+        "todayExpenses": { "type": "number" },
+        "recentSales": { "type": "array" },
+        "topProducts": { "type": "array" },
+        "lowStockAlerts": { "type": "array" },
+        "nearExpiryAlerts": { "type": "array" },
+        "salesTrend": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "businessId", "updatedAt"]
+    },
+    "accountUsage": {
+      "title": "AccountUsage",
+      "description": "Multi-tenant active resource consumption and plan quota validation tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "businessId": { "type": "string" },
+        "userCount": { "type": "number" },
+        "firmCount": { "type": "number" },
+        "activePlan": { "type": "string" },
+        "maxUsersAllowed": { "type": "number" },
+        "maxFirmsAllowed": { "type": "number" },
+        "isOverLimit": { "type": "boolean" },
+        "lastUpdated": { "type": "string" },
+        "usageHistory": { "type": "array" }
+      },
+      "required": ["id", "tenantId", "userCount", "firmCount"]
+    },
+    "platformSettings": {
+      "title": "PlatformSettings",
+      "description": "Centralized global feature toggles, security flags, and platform-wide configurations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "features": { "type": "object" },
+        "maintenanceMode": { "type": "boolean" },
+        "announcementBanner": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "features", "updatedAt"]
+    },
+    "userSettings": {
+      "title": "UserSettings",
+      "description": "User specific application settings, FIFO/FEFO stock rotation, UI preferences and customization per user and business firm",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "firmId": { "type": "string" },
+        "settings": { "type": "object" },
+        "userPreferences": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "settings", "updatedAt"]
+    }
+  },
+  "firestoreRules": "firestore.rules"
+}

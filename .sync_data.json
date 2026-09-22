@@ -1,0 +1,11 @@
+{
+  "medicines": [],
+  "invoices": [],
+  "purchaseOrders": [],
+  "suppliers": [],
+  "partyPayments": [],
+  "expenses": [],
+  "bankTransactions": [],
+  "auditLogs": [],
+  "appUsers": []
+}

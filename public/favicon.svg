@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Vibrant Cyan and Blue Gradients for MBI Logo -->
+    <linearGradient id="mFoldCyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D5FF"/>
+      <stop offset="60%" stop-color="#0088FF"/>
+      <stop offset="100%" stop-color="#0055EE"/>
+    </linearGradient>
+
+    <linearGradient id="bGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C6FF"/>
+      <stop offset="50%" stop-color="#0072FF"/>
+      <stop offset="100%" stop-color="#0044CC"/>
+    </linearGradient>
+
+    <!-- Drop Shadow for Premium Elevation -->
+    <filter id="mbiSoftShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0044CC" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- Clean Background Container -->
+  <rect width="512" height="512" rx="96" fill="#FFFFFF"/>
+
+  <!-- Centered MBI Emblem -->
+  <g transform="translate(38, 156)" filter="url(#mbiSoftShadow)">
+    
+    <!-- ==================== LETTER M ==================== -->
+    <!-- Left Navy Stem -->
+    <path d="M 0,0 L 40,0 L 40,200 L 0,200 Z" fill="#0B1A2D"/>
+    
+    <!-- Right Navy Stem -->
+    <path d="M 132,0 L 172,0 L 172,200 L 132,200 Z" fill="#0B1A2D"/>
+
+    <!-- M - Navy Diagonal Base -->
+    <path d="M 40,0 L 86,110 L 132,0 L 102,0 L 86,40 L 70,0 Z" fill="#0B1A2D"/>
+
+    <!-- M - Cyan/Blue 3D Ribbon Fold Arrow (Matching FA.png) -->
+    <path d="M 22,70 L 86,165 L 150,55 L 122,35 L 86,108 L 48,50 Z" fill="url(#mFoldCyanGrad)"/>
+
+    <!-- ==================== LETTER B ==================== -->
+    <!-- B - Left Navy Stem -->
+    <path d="M 194,0 L 234,0 L 234,200 L 194,200 Z" fill="#0B1A2D"/>
+
+    <!-- B - Outer Gradient Blue Loops Block -->
+    <path d="M 234,0 L 308,0 C 348,0 372,22 372,58 C 372,82 354,98 330,102 C 358,108 376,128 376,156 C 376,188 348,200 308,200 L 234,200 Z" fill="url(#bGradient)"/>
+
+    <!-- B - Top Cutout -->
+    <rect x="234" y="32" width="76" height="42" rx="21" fill="#FFFFFF"/>
+
+    <!-- B - Bottom Cutout -->
+    <rect x="234" y="124" width="82" height="46" rx="23" fill="#FFFFFF"/>
+
+    <!-- ==================== LETTER I ==================== -->
+    <!-- Solid Navy Vertical Bar -->
+    <path d="M 398,0 L 438,0 L 438,200 L 398,200 Z" fill="#0B1A2D"/>
+  </g>
+</svg>

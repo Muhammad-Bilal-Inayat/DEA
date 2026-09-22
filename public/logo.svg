@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 240" width="960" height="240">
+  <defs>
+    <!-- Vibrant Blue Gradient for INVENTRA Text -->
+    <linearGradient id="inventraBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A2FF"/>
+      <stop offset="50%" stop-color="#0066EE"/>
+      <stop offset="100%" stop-color="#0038B8"/>
+    </linearGradient>
+
+    <!-- Subtitle Line Blue Accent Gradient -->
+    <linearGradient id="lineBlueGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0066FF"/>
+      <stop offset="100%" stop-color="#0044CC"/>
+    </linearGradient>
+  </defs>
+
+  <style>
+    .text-mbi {
+      fill: #111827;
+    }
+    .text-inventra {
+      fill: url(#inventraBlueGrad);
+    }
+    .subtitle-text {
+      font-family: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      font-weight: 700;
+      font-size: 23px;
+      letter-spacing: 0.36em;
+      fill: #1E293B;
+    }
+    @media (prefers-color-scheme: dark) {
+      .text-mbi {
+        fill: #F8FAFC;
+      }
+      .subtitle-text {
+        fill: #E2E8F0;
+      }
+    }
+  </style>
+
+  <!-- ==================== MAIN BRAND HEADLINE ==================== -->
+  <g transform="translate(20, 115)">
+    <!-- MBI INVENTRA Paths / Typography -->
+    <!-- M -->
+    <path class="text-mbi" d="M 0,-85 L 26,-85 L 54,-20 L 82,-85 L 108,-85 L 108,15 L 84,15 L 84,-45 L 62,5 L 46,5 L 24,-45 L 24,15 L 0,15 Z" />
+
+    <!-- B -->
+    <path class="text-mbi" d="M 120,-85 L 174,-85 C 196,-85 210,-75 210,-58 C 210,-45 200,-37 186,-33 C 202,-29 214,-19 214,-2 C 214,22 196,15 170,15 L 120,15 Z M 144,-65 L 144,-45 L 168,-45 C 178,-45 184,-49 184,-55 C 184,-61 178,-65 168,-65 Z M 144,-25 L 144,-5 L 172,-5 C 182,-5 188,-10 188,-15 C 188,-20 182,-25 172,-25 Z" />
+
+    <!-- I -->
+    <path class="text-mbi" d="M 226,-85 L 250,-85 L 250,15 L 226,15 Z" />
+
+    <!-- Space -->
+
+    <!-- I -->
+    <path class="text-inventra" d="M 272,-85 L 296,-85 L 296,15 L 272,15 Z" />
+
+    <!-- N -->
+    <path class="text-inventra" d="M 310,-85 L 334,-85 L 372,-15 L 372,-85 L 396,-85 L 396,15 L 372,15 L 334,-55 L 334,15 L 310,15 Z" />
+
+    <!-- V -->
+    <path class="text-inventra" d="M 408,-85 L 434,-85 L 454,-10 L 474,-85 L 500,-85 L 468,15 L 440,15 Z" />
+
+    <!-- E -->
+    <path class="text-inventra" d="M 512,-85 L 580,-85 L 580,-63 L 536,-63 L 536,-45 L 574,-45 L 574,-25 L 536,-25 L 536,-7 L 582,-7 L 582,15 L 512,15 Z" />
+
+    <!-- N -->
+    <path class="text-inventra" d="M 594,-85 L 618,-85 L 656,-15 L 656,-85 L 680,-85 L 680,15 L 656,15 L 618,-55 L 618,15 L 594,15 Z" />
+
+    <!-- T -->
+    <path class="text-inventra" d="M 692,-85 L 762,-85 L 762,-63 L 739,-63 L 739,15 L 715,15 L 715,-63 L 692,-63 Z" />
+
+    <!-- R -->
+    <path class="text-inventra" d="M 774,-85 L 814,-85 C 834,-85 846,-75 846,-58 C 846,-45 836,-36 822,-33 L 848,15 L 822,15 L 800,-30 L 798,-30 L 798,15 L 774,15 Z M 798,-65 L 798,-48 L 812,-48 C 820,-48 824,-52 824,-56 C 824,-61 820,-65 812,-65 Z" />
+
+    <!-- A -->
+    <path class="text-inventra" d="M 872,-85 L 898,-85 L 928,15 L 902,15 L 896,-8 L 870,-8 L 864,15 L 838,15 Z M 875,-28 L 891,-28 L 883,-60 Z" />
+  </g>
+
+  <!-- ==================== TAGLINE & ACCOMPANYING RULES ==================== -->
+  <g transform="translate(0, 182)">
+    <!-- Left Horizontal Blue Rule -->
+    <line x1="20" y1="12" x2="210" y2="12" stroke="url(#lineBlueGrad)" stroke-width="3" stroke-linecap="round" />
+
+    <!-- Center Subtitle Text -->
+    <text x="225" y="21" class="subtitle-text">PHARMACY &amp; INVENTORY MANAGEMENT</text>
+
+    <!-- Right Horizontal Blue Rule -->
+    <line x1="750" y1="12" x2="940" y2="12" stroke="url(#lineBlueGrad)" stroke-width="3" stroke-linecap="round" />
+  </g>
+</svg>
